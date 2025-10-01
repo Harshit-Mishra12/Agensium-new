@@ -1,136 +1,61 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from app.agents.source import schema_scanner, dedup_agent, field_profiler, drift_detector, readiness_rater
-from app.orchestrator import workflow
-import os
-import shutil
-from tempfile import NamedTemporaryFile
+from app.agents.source import schema_scanner, readiness_rater, field_profiler, drift_detector, dedup_agent
 
 router = APIRouter()
-SUPPORTED_FILE_EXTENSIONS = {"csv", "xlsx", "xls", "json", "sql"}
 
-
-# --- Schema scanner endpoint ---
 @router.post("/scan-schema")
-async def scan_schema(file: UploadFile = File(...)):
-    file_extension = file.filename.split('.')[-1].lower()
-    if file_extension not in SUPPORTED_FILE_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file type. Supported types are: {', '.join(SUPPORTED_FILE_EXTENSIONS)}"
-        )
-    try:
-        contents = await file.read()
-        return schema_scanner.scan_schema(contents, file.filename)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing file: {e}")
+async def scan_schema_endpoint(file: UploadFile = File(...)):
+    """
+    Endpoint for the Schema Scanner agent.
+    Accepts CSV, Excel, JSON, and SQL files.
+    """
+    supported_formats = ('.csv', '.xlsx', '.xls', '.json', '.sql')
+    if not file.filename.endswith(supported_formats):
+        raise HTTPException(status_code=400, detail="Unsupported file format.")
+    contents = await file.read()
+    return schema_scanner.scan_schema(contents, file.filename)
 
-
-# --- Field profiler endpoint (CSV, Excel, JSON, SQL) ---
-@router.post("/field-profiler")
-async def profile_dataset(file: UploadFile = File(...)):
-    try:
-        contents = await file.read()
-        filename = file.filename
-
-        if filename.lower().endswith(".csv"):
-            return field_profiler.profile_csv(contents, filename)
-
-        elif filename.lower().endswith((".xlsx", ".xls")):
-            return field_profiler.profile_excel(contents, filename)
-
-        elif filename.lower().endswith(".json"):
-            return field_profiler.profile_json(contents, filename)
-
-        elif filename.lower().endswith(".sql"):
-            return field_profiler.profile_sql(contents, filename)
-
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail="Unsupported file type. Upload CSV, Excel, JSON, or SQL."
-            )
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing file: {e}")
-
-
-# --- Readiness rater endpoint ---
 @router.post("/rate-readiness")
 async def rate_readiness_endpoint(file: UploadFile = File(...)):
     """
-    Calculates the readiness score for a dataset from an uploaded file.
-    Supported file types: CSV, Excel, JSON, SQL.
+    Endpoint for the Readiness Rater agent.
+    Accepts CSV, Excel, JSON, and Parquet files.
     """
-    file_extension = file.filename.split('.')[-1].lower()
-    if file_extension not in SUPPORTED_FILE_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file format for readiness rating: {file_extension}"
-        )
+    supported_formats = ('.csv', '.xlsx', '.xls', '.json', '.parquet', '.sql')
+    if not file.filename.endswith(supported_formats):
+        raise HTTPException(status_code=400, detail="Unsupported file format.")
+    contents = await file.read()
+    return readiness_rater.rate_readiness(contents, file.filename)
 
-    try:
-        contents = await file.read()
-        return readiness_rater.rate_readiness(contents, file.filename)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error rating readiness: {e}")
+@router.post("/profile-fields")
+async def profile_fields_endpoint(file: UploadFile = File(...)):
+    """
+    Endpoint for the Field Profiler agent.
+    Accepts CSV and Excel files.
+    """
+    supported_formats = ('.csv', '.xlsx', '.xls')
+    if not file.filename.endswith(supported_formats):
+        raise HTTPException(status_code=400, detail="Unsupported file format.")
+    contents = await file.read()
+    return field_profiler.profile_fields(contents, file.filename)
 
+@router.post("/detect-drift")
+async def detect_drift_endpoint(baseline_file: UploadFile = File(...), current_file: UploadFile = File(...)):
+    """
+    Endpoint for the Drift Detector agent. Requires two CSV file uploads.
+    """
+    if not baseline_file.filename.endswith('.csv') or not current_file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Drift detection currently supports CSV files only.")
+    
+    baseline_contents = await baseline_file.read()
+    current_contents = await current_file.read()
+    # Using one filename as a representative name for the analysis
+    return drift_detector.detect_drift(baseline_contents, current_contents, baseline_file.filename)
 
-# --- Deduplicate endpoint ---
 @router.post("/deduplicate")
-def deduplicate(items: list[str]):
+def deduplicate_endpoint(items: list[str]):
+    """
+    Simple endpoint for the deduplication agent.
+    """
     return dedup_agent.deduplicate(items)
 
-
-# --- Orchestrator endpoint ---
-@router.post("/run-workflow")
-def run_workflow(dataset: list[dict], items: list[str]):
-    return workflow(dataset, items)
-
-
-# --- Drift Detector endpoint (CSV, Excel, JSON, SQL) ---
-@router.post("/detect-drift")
-async def detect_drift(
-    baseline_file: UploadFile = File(...),
-    current_file: UploadFile = File(...)
-):
-    """
-    Detect drift between baseline and current datasets (CSV, Excel, JSON, SQL).
-    Returns JSON report with schema and data drift.
-    """
-    valid_ext = (".csv", ".xlsx", ".xls", ".json", ".sql")
-    if not baseline_file.filename.lower().endswith(valid_ext) or not current_file.filename.lower().endswith(valid_ext):
-        raise HTTPException(
-            status_code=400,
-            detail="Files must be of the same supported type (CSV, Excel, JSON, SQL)."
-        )
-
-    try:
-        # Save baseline temp file
-        base_suffix = os.path.splitext(baseline_file.filename)[1]
-        with NamedTemporaryFile(delete=False, suffix=base_suffix) as tmp_base:
-            shutil.copyfileobj(baseline_file.file, tmp_base)
-            baseline_path = tmp_base.name
-
-        # Save current temp file
-        curr_suffix = os.path.splitext(current_file.filename)[1]
-        with NamedTemporaryFile(delete=False, suffix=curr_suffix) as tmp_curr:
-            shutil.copyfileobj(current_file.file, tmp_curr)
-            current_path = tmp_curr.name
-
-        # ✅ Pass original names so DriftDetector can use them
-        report = drift_detector.DriftDetector.detect_drift(
-            baseline_path, current_path,
-            baseline_name=baseline_file.filename,
-            current_name=current_file.filename
-        )
-        return report
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error detecting drift: {e}")
-    finally:
-        # Cleanup temp files
-        try:
-            os.remove(baseline_path)
-            os.remove(current_path)
-        except Exception:
-            pass

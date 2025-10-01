@@ -1,0 +1,101 @@
+OrderID,CustomerID,ProductID,ProductName,Category,Quantity,UnitPrice,OrderDate,ShippingAddress,Region,Discount,OrderStatus
+1001,CUST-8462,PROD-101,QuantumCore Laptop,Electronics,1,1200.00,2023-01-15,123 Quantum St, North,0.05,Shipped
+1002,CUST-1138,PROD-202,Starlight T-Shirt,Clothing,2,25.50,2023-01-16,456 Galaxy Ave,South,,Delivered
+1003,CUST-5821,PROD-303,Cosmic Coffee Mug,Home Goods,4,15.00,2023-01-17,789 Nebula Blvd,East,0.1,Shipped
+1004,CUST-8462,PROD-102,Neutron Wireless Mouse,Electronics,1,49.99,2023-01-18,,North,0.0,Pending
+1005,CUST-9573,PROD-401,"The Martian Chronicles",Books,1,12.99,2023-01-19,321 Meteor Ln,West,,Shipped
+1006,CUST-1138,PROD-203,Eclipse Jeans,Clothing,1,89.95,2023-01-20,456 Galaxy Ave,South,0.2,Delivered
+1007,CUST-4231,PROD-301,Astro-Themed Blanket,Home Goods,1,59.50,2023-01-21,654 Comet Ct,North,,Cancelled
+1008,CUST-5821,PROD-103,Supernova Speakers,Electronics,1,199.00,2023-01-22,789 Nebula Blvd,East,0.15,Shipped
+1009,CUST-7788,PROD-402,"Dune",Books,1,14.50,2023-01-23,987 Asteroid Rd,West,,Delivered
+1010,CUST-8462,PROD-202,Starlight T-Shirt,Clothing,3,25.50,2023-01-24,123 Quantum St,North,0.05,Shipped
+1011,CUST-1138,PROD-303,Cosmic Coffee Mug,Home Goods,2,15.00,2023-01-25,456 Galaxy Ave,South,0.2,Delivered
+1012,CUST-9573,PROD-101,QuantumCore Laptop,Electronics,1,1200.00,2023-01-26,321 Meteor Ln,West,,Shipped
+1013,CUST-4231,PROD-203,Eclipse Jeans,Clothing,1,89.95,2023-01-27,654 Comet Ct,North,,Pending
+1014,CUST-5821,PROD-401,"The Martian Chronicles",Books,2,12.99,2023-01-28,789 Nebula Blvd,East,0.1,Shipped
+1015,CUST-7788,PROD-301,Astro-Themed Blanket,Home Goods,1,59.50,2023-01-29,987 Asteroid Rd,West,,Delivered
+1016,CUST-8462,PROD-102,Neutron Wireless Mouse,Electronics,2,49.99,2023-01-30,123 Quantum St,North,0.0,Shipped
+1017,CUST-1138,PROD-402,"Dune",Books,1,14.50,2023-01-31,456 Galaxy Ave,South,,Delivered
+1018,CUST-9573,PROD-202,Starlight T-Shirt,Clothing,1,25.50,2023-02-01,321 Meteor Ln,West,0.0,Shipped
+1019,CUST-4231,PROD-103,Supernova Speakers,Electronics,1,199.00,2023-02-02,654 Comet Ct,North,0.15,Pending
+1020,CUST-5821,PROD-303,Cosmic Coffee Mug,Home Goods,3,15.00,2023-02-03,789 Nebula Blvd,East,0.1,Shipped
+1021,CUST-7788,PROD-101,QuantumCore Laptop,Electronics,1,1150.00,2023-02-04,987 Asteroid Rd,West,,Delivered
+1022,CUST-8462,PROD-203,Eclipse Jeans,Clothing,1,89.95,2023-02-05,123 Quantum St,North,0.2,Shipped
+1023,CUST-1138,PROD-301,Astro-Themed Blanket,Home Goods,2,59.50,2023-02-06,456 Galaxy Ave,South,,Cancelled
+1024,CUST-9573,PROD-401,"The Martian Chronicles",Books,1,12.99,2023-02-07,321 Meteor Ln,West,,Shipped
+1025,CUST-4231,PROD-102,Neutron Wireless Mouse,Electronics,1,49.99,2023-02-08,654 Comet Ct,North,0.0,Delivered
+1026,CUST-5821,PROD-202,Starlight T-Shirt,Clothing,2,25.50,2023-02-09,789 Nebula Blvd,East,0.05,Shipped
+1027,CUST-7788,PROD-303,Cosmic Coffee Mug,Home Goods,1,15.00,2023-02-10,987 Asteroid Rd,West,,Pending
+1028,CUST-8462,PROD-402,"Dune",Books,1,14.50,2023-02-11,123 Quantum St,North,,Shipped
+1029,CUST-1138,PROD-103,Supernova Speakers,Electronics,1,199.00,2023-02-12,456 Galaxy Ave,South,0.15,Delivered
+1030,CUST-9573,PROD-301,Astro-Themed Blanket,Home Goods,1,59.50,2023-02-13,321 Meteor Ln,West,,Shipped
+1031,CUST-4231,PROD-203,Eclipse Jeans,Clothing,1,89.95,2023-02-14,654 Comet Ct,North,0.2,Delivered
+1032,CUST-5821,PROD-101,QuantumCore Laptop,Electronics,1,1200.00,2023-02-15,789 Nebula Blvd,East,,Cancelled
+1033,CUST-7788,PROD-401,"The Martian Chronicles",Books,3,12.99,2023-02-16,987 Asteroid Rd,West,0.1,Shipped
+1034,CUST-8462,PROD-303,Cosmic Coffee Mug,Home Goods,2,15.00,2023-02-17,123 Quantum St,North,0.1,Delivered
+1035,CUST-1138,PROD-102,Neutron Wireless Mouse,Electronics,1,49.99,2023-02-18,456 Galaxy Ave,South,,Shipped
+1036,CUST-9573,PROD-202,Starlight T-Shirt,Clothing,2,25.50,2023-02-19,321 Meteor Ln,West,0.05,Pending
+1037,CUST-4231,PROD-402,"Dune",Books,1,14.50,2023-02-20,654 Comet Ct,North,,Shipped
+1038,CUST-5821,PROD-103,Supernova Speakers,Electronics,1,199.00,2023-02-21,789 Nebula Blvd,East,0.15,Delivered
+1039,CUST-7788,PROD-203,Eclipse Jeans,Clothing,1,89.95,2023-02-22,987 Asteroid Rd,West,0.2,Shipped
+1040,CUST-8462,PROD-301,Astro-Themed Blanket,Home Goods,1,59.50,2023-02-23,123 Quantum St,North,,Delivered
+1041,CUST-1138,PROD-401,"The Martian Chronicles",Books,1,12.99,2023-02-24,456 Galaxy Ave,South,0.1,Shipped
+1042,CUST-9573,PROD-101,QuantumCore Laptop,Electronics,1,1150.00,2023-02-25,321 Meteor Ln,West,,Cancelled
+1043,CUST-4231,PROD-303,Cosmic Coffee Mug,Home Goods,4,15.00,2023-02-26,654 Comet Ct,North,0.1,Shipped
+1044,CUST-5821,PROD-102,Neutron Wireless Mouse,Electronics,1,49.99,2023-02-27,789 Nebula Blvd,East,0.0,Delivered
+1045,CUST-7788,PROD-202,Starlight T-Shirt,Clothing,1,25.50,2023-02-28,987 Asteroid Rd,West,0.05,Shipped
+1046,CUST-8462,PROD-402,"Dune",Books,1,14.50,2023-03-01,123 Quantum St,North,,Pending
+1047,CUST-1138,PROD-103,Supernova Speakers,Electronics,1,199.00,2023-03-02,456 Galaxy Ave,South,0.15,Shipped
+1048,CUST-9573,PROD-203,Eclipse Jeans,Clothing,1,89.95,2023-03-03,321 Meteor Ln,West,0.2,Delivered
+1049,CUST-4231,PROD-301,Astro-Themed Blanket,Home Goods,2,59.50,2023-03-04,654 Comet Ct,North,,Shipped
+1050,CUST-5821,PROD-401,"The Martian Chronicles",Books,1,12.99,2023-03-05,789 Nebula Blvd,East,0.1,Delivered
+1051,CUST-1138,PROD-202,Starlight T-Shirt,Clothing,5,25.50,2023-03-06,456 Galaxy Ave,South,,Shipped
+1052,CUST-4231,PROD-101,QuantumCore Laptop,Electronics,1,1200.00,2023-03-07,654 Comet Ct,North,0.05,Delivered
+1053,CUST-8462,PROD-303,Cosmic Coffee Mug,Home Goods,3,15.00,2023-03-08,123 Quantum St,North,0.1,Shipped
+1054,CUST-9573,PROD-102,Neutron Wireless Mouse,Electronics,1,49.99,2023-03-09,321 Meteor Ln,West,,Pending
+1055,CUST-7788,PROD-203,Eclipse Jeans,Clothing,1,89.95,2023-03-10,987 Asteroid Rd,West,0.2,Shipped
+1056,CUST-5821,PROD-402,"Dune",Books,1,14.50,2023-03-11,789 Nebula Blvd,East,,Delivered
+1057,CUST-4231,PROD-301,Astro-Themed Blanket,Home Goods,1,59.50,2023-03-12,654 Comet Ct,North,,Cancelled
+1058,CUST-8462,PROD-103,Supernova Speakers,Electronics,1,199.00,2023-03-13,123 Quantum St,North,0.15,Shipped
+1059,CUST-1138,PROD-401,"The Martian Chronicles",Books,2,12.99,2023-03-14,456 Galaxy Ave,South,,Delivered
+1060,CUST-9573,PROD-202,Starlight T-Shirt,Clothing,1,25.50,2023-03-15,321 Meteor Ln,West,0.05,Shipped
+1061,CUST-7788,PROD-303,Cosmic Coffee Mug,Home Goods,2,15.00,2023-03-16,987 Asteroid Rd,West,0.1,Delivered
+1062,CUST-5821,PROD-101,QuantumCore Laptop,Electronics,1,1200.00,2023-03-17,789 Nebula Blvd,East,0.05,Shipped
+1063,CUST-4231,PROD-203,Eclipse Jeans,Clothing,1,89.95,2023-03-18,654 Comet Ct,North,,Pending
+1064,CUST-8462,PROD-402,"Dune",Books,1,14.50,2023-03-19,123 Quantum St,North,0.0,Shipped
+1065,CUST-1138,PROD-102,Neutron Wireless Mouse,Electronics,3,49.99,2023-03-20,456 Galaxy Ave,South,,Delivered
+1066,CUST-9573,PROD-301,Astro-Themed Blanket,Home Goods,1,59.50,2023-03-21,321 Meteor Ln,West,,Shipped
+1067,CUST-7788,PROD-401,"The Martian Chronicles",Books,1,12.99,2023-03-22,987 Asteroid Rd,West,0.1,Delivered
+1068,CUST-5821,PROD-103,Supernova Speakers,Electronics,1,199.00,2023-03-23,789 Nebula Blvd,East,0.15,Shipped
+1069,CUST-4231,PROD-202,Starlight T-Shirt,Clothing,2,25.50,2023-03-24,654 Comet Ct,North,,Cancelled
+1070,CUST-8462,PROD-303,Cosmic Coffee Mug,Home Goods,1,15.00,2023-03-25,123 Quantum St,North,0.1,Shipped
+1071,CUST-1138,PROD-101,QuantumCore Laptop,Electronics,1,1150.00,2023-03-26,456 Galaxy Ave,South,,Delivered
+1072,CUST-9573,PROD-203,Eclipse Jeans,Clothing,1,89.95,2023-03-27,321 Meteor Ln,West,0.2,Shipped
+1073,CUST-7788,PROD-301,Astro-Themed Blanket,Home Goods,1,59.50,2023-03-28,987 Asteroid Rd,West,,Pending
+1074,CUST-5821,PROD-402,"Dune",Books,2,14.50,2023-03-29,789 Nebula Blvd,East,,Shipped
+1075,CUST-4231,PROD-102,Neutron Wireless Mouse,Electronics,1,49.99,2023-03-30,654 Comet Ct,North,0.0,Delivered
+1076,CUST-8462,PROD-202,Starlight T-Shirt,Clothing,3,25.50,2023-03-31,123 Quantum St,North,0.05,Shipped
+1077,CUST-1138,PROD-303,Cosmic Coffee Mug,Home Goods,1,15.00,2023-04-01,456 Galaxy Ave,South,,Delivered
+1078,CUST-9573,PROD-401,"The Martian Chronicles",Books,1,12.99,2023-04-02,321 Meteor Ln,West,0.1,Shipped
+1079,CUST-7788,PROD-103,Supernova Speakers,Electronics,1,199.00,2023-04-03,987 Asteroid Rd,West,0.15,Cancelled
+1080,CUST-5821,PROD-203,Eclipse Jeans,Clothing,1,89.95,2023-04-04,789 Nebula Blvd,East,0.2,Shipped
+1081,CUST-4231,PROD-101,QuantumCore Laptop,Electronics,1,1200.00,2023-04-05,654 Comet Ct,North,,Delivered
+1082,CUST-8462,PROD-301,Astro-Themed Blanket,Home Goods,2,59.50,2023-04-06,123 Quantum St,North,,Shipped
+1083,CUST-1138,PROD-402,"Dune",Books,1,14.50,2023-04-07,456 Galaxy Ave,South,,Pending
+1084,CUST-9573,PROD-102,Neutron Wireless Mouse,Electronics,1,49.99,2023-04-08,321 Meteor Ln,West,0.0,Shipped
+1085,CUST-7788,PROD-202,Starlight T-Shirt,Clothing,1,25.50,2023-04-09,987 Asteroid Rd,West,0.05,Delivered
+1086,CUST-5821,PROD-303,Cosmic Coffee Mug,Home Goods,3,15.00,2023-04-10,789 Nebula Blvd,East,0.1,Shipped
+1087,CUST-4231,PROD-401,"The Martian Chronicles",Books,1,12.99,2023-04-11,654 Comet Ct,North,,Delivered
+1088,CUST-8462,PROD-103,Supernova Speakers,Electronics,1,199.00,2023-04-12,123 Quantum St,North,0.15,Shipped
+1089,CUST-1138,PROD-203,Eclipse Jeans,Clothing,1,89.95,2023-04-13,456 Galaxy Ave,South,0.2,Cancelled
+1090,CUST-9573,PROD-301,Astro-Themed Blanket,Home Goods,1,59.50,2023-04-14,321 Meteor Ln,West,,Shipped
+1091,CUST-7788,PROD-101,QuantumCore Laptop,Electronics,1,1150.00,2023-04-15,987 Asteroid Rd,West,,Delivered
+1092,CUST-5821,PROD-202,Starlight T-Shirt,Clothing,4,25.50,2023-04-16,789 Nebula Blvd,East,0.05,Shipped
+1093,CUST-4231,PROD-402,"Dune",Books,1,14.50,2023-04-17,654 Comet Ct,North,,Pending
+1094,CUST-8462,PROD-102,Neutron Wireless Mouse,Electronics,1,49.99,2023-04-18,123 Quantum St,North,0.0,Shipped
+1095,CUST-1138,PROD-303,Cosmic Coffee Mug,Home Goods,2,15.00,2023-04-19,456 Galaxy Ave,South,0.1,Delivered
+1096,CUST-9573,PROD-401,"The Martian Chronicles",Books,1,12.99,2023-04-20,321 Meteor Ln,West,,Shipped
+1097,CUST-7788,PROD-103,Supernova Speakers,Electronics,1,199.00,2023-04-21,987 Asteroid Rd,West,0.15,Delivered
+1098,CUST-5821,PROD-203,Eclipse Jeans,Clothing,1,89.95,2023-04-22,789 Nebula Blvd,East,0.2,Shipped
+1099,CUST-4231,PROD-301,Astro-Themed Blanket,Home Goods,1,59.50,2023-04-23,654 Comet Ct,North,,Cancelled
+1100,CUST-8462,PROD-202,Starlight T-Shirt,Clothing,1,25.50,2023-04-24,123 Quantum St,North,0.05,Shipped

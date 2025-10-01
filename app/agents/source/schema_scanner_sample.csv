@@ -1,0 +1,11 @@
+customer_id,transaction_date,amount,payment_method,region
+1001,2023-01-15,250.00,Credit Card,West
+1002,2023-01-16,89.99,PayPal,East
+1003,,120.00,,South
+1004,2023-01-17,,Credit Card,West
+1005,2023-01-18,300.00,Debit Card,
+1006,2023-01-19,45.50,Credit Card,East
+1007,2023-01-20,150.00,PayPal,North
+1008,2023-01-21,75.25,Gift Card,West
+1009,,210.00,Credit Card,South
+1010,2023-01-23,99.99,PayPal,North

@@ -1,0 +1,11 @@
+customer_id,transaction_date,amount,payment_method,referral_code
+1001,2023-06-15,260.00,Credit Card,REF123
+1002,2023-06-16,95.00,PayPal,
+1003,2023-06-17,,Crypto,REF456
+1004,2023-06-18,500.00,Credit Card,
+1005,2023-06-19,310.00,Debit Card,REF789
+1006,2023-06-20,45.50,,REF101
+1007,2023-06-21,160.00,PayPal,REF202
+1008,2023-06-22,80.25,Gift Card,
+1009,2023-06-23,,Credit Card,REF303
+1010,2023-06-24,105.00,Crypto,

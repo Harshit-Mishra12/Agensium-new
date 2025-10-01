@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pandas
+openpyxl
+pyarrow
+SQLAlchemy
+psycopg2-binary
+sqlparse
+scipy

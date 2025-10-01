@@ -1,0 +1,92 @@
+[
+{
+"user_id": "usr_101",
+"name": "Alice",
+"email": "alice@example.com",
+"last_seen": "2023-10-26T10:00:00Z",
+"total_orders": 15,
+"country_code": "US",
+"status": "active"
+},
+{
+"user_id": "usr_102",
+"name": "Bob",
+"email": null,
+"last_seen": "2023-10-25T14:30:00Z",
+"total_orders": 5,
+"country_code": "CA",
+"status": "active"
+},
+{
+"user_id": "usr_103",
+"name": "Charlie",
+"email": "charlie@example.com",
+"last_seen": "2023-10-26T11:00:00Z",
+"total_orders": 22,
+"country_code": "US",
+"status": "active"
+},
+{
+"user_id": "usr_104",
+"name": "Diana",
+"email": "diana@example.com",
+"last_seen": null,
+"total_orders": 8,
+"country_code": "GB",
+"status": "active"
+},
+{
+"user_id": "usr_105",
+"name": "Edward",
+"email": "edward@example.com",
+"last_seen": "2023-10-24T09:00:00Z",
+"total_orders": 12,
+"country_code": "US",
+"status": "active"
+},
+{
+"user_id": "usr_103",
+"name": "Charlie",
+"email": "charlie@example.com",
+"last_seen": "2023-10-26T11:00:00Z",
+"total_orders": 22,
+"country_code": "US",
+"status": "active"
+},
+{
+"user_id": "usr_106",
+"name": "Fiona",
+"email": "fiona@example.com",
+"last_seen": "2023-10-26T15:00:00Z",
+"total_orders": 3,
+"country_code": "CA",
+"status": "active"
+},
+{
+"user_id": "usr_107",
+"name": "George",
+"email": "george@example.com",
+"last_seen": "2023-10-22T18:45:00Z",
+"total_orders": 31,
+"country_code": "GB",
+"status": "active"
+},
+{
+"user_id": "usr_105",
+"name": "Edward",
+"email": "edward@example.com",
+"last_seen": "2023-10-24T09:00:00Z",
+"total_orders": 12,
+"country_code": "US",
+"status": "active"
+},
+{
+"user_id": "usr_108",
+"name": "Hannah",
+"email": "hannah@example.com",
+"last_seen": null,
+"total_orders": 0,
+"country_code": "AU",
+"status": "active"
+}
+]

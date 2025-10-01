@@ -1,0 +1,47 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.env/
+
+# FastAPI / Uvicorn
+# (Nothing specific needs ignoring here except for logs or temp files)
+*.log
+*.sqlite3
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# IDEs / editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# macOS
+.DS_Store
+
+# Coverage and testing
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+
+# PyInstaller
+*.spec
+
+# Optional: Ignore temporary Excel files if generated during work
+*.xlsx~
+*.xlsm~

@@ -1,0 +1,14 @@
+OrderID,CustomerID,OrderDate,TotalAmount,ShippingStatus,Notes
+ORD-001,CUST-A,2025-10-01,150.50,Pending,
+ORD-002,CUST-B,,25.00,Pending,Ship fast
+ORD-003,CUST-A,2025-10-02,,Pending,12345
+ORD-004,CUST-C,2025-10-03,300.00,Pending,OK
+ORD-004,CUST-C,2025-10-03,300.00,Pending,OK
+ORD-005,CUST-D,,,Pending,
+ORD-006,CUST-E,2025-10-04,50.25,Pending,Handle with care
+ORD-007,CUST-F,,,Pending,98765
+ORD-008,CUST-G,2025-10-05,99.99,Pending,
+ORD-008,CUST-G,2025-10-05,99.99,Pending,
+ORD-008,CUST-G,2025-10-05,99.99,Pending,
+ORD-009,CUST-H,,,Pending,Urgent
+ORD-010,CUST-A,,,Pending,

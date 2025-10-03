@@ -1,0 +1,9 @@
+TransactionID,ProductID,Price,Category,Region,Discount
+1,P101,65.00,Electronics,North,0.05
+2,P102,18.00,Apparel,North,0.10
+3,P103,210.00,Electronics,South,0.05
+4,P104,30.00,Home Goods,West,0.15
+5,P102,19.50,Apparel,South,0.10
+6,P101,68.00,Electronics,North,0.05
+7,P104,32.00,Home Goods,West,0.15
+8,P106,45.00,Apparel,Central,0.10

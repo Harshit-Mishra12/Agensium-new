@@ -1,61 +1,73 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from app.agents.source import schema_scanner, readiness_rater, field_profiler, drift_detector, dedup_agent
+from app.config import AGENT_ROUTES
 
 router = APIRouter()
+SUPPORTED_FILE_EXTENSIONS = {"csv", "xlsx", "xls", "json", "sql"}
 
-@router.post("/scan-schema")
+@router.post(AGENT_ROUTES['scan_schema'])
 async def scan_schema_endpoint(file: UploadFile = File(...)):
     """
     Endpoint for the Schema Scanner agent.
     Accepts CSV, Excel, JSON, and SQL files.
     """
-    supported_formats = ('.csv', '.xlsx', '.xls', '.json', '.sql')
-    if not file.filename.endswith(supported_formats):
-        raise HTTPException(status_code=400, detail="Unsupported file format.")
+    file_extension = file.filename.split('.')[-1].lower()
+    if file_extension not in SUPPORTED_FILE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Supported types are: {', '.join(SUPPORTED_FILE_EXTENSIONS)}"
+        )
     contents = await file.read()
     return schema_scanner.scan_schema(contents, file.filename)
 
-@router.post("/rate-readiness")
+@router.post(AGENT_ROUTES['rate_readiness'])
 async def rate_readiness_endpoint(file: UploadFile = File(...)):
     """
     Endpoint for the Readiness Rater agent.
     Accepts CSV, Excel, JSON, and Parquet files.
     """
-    supported_formats = ('.csv', '.xlsx', '.xls', '.json', '.parquet', '.sql')
-    if not file.filename.endswith(supported_formats):
-        raise HTTPException(status_code=400, detail="Unsupported file format.")
+    file_extension = file.filename.split('.')[-1].lower()
+    if file_extension not in SUPPORTED_FILE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Supported types are: {', '.join(SUPPORTED_FILE_EXTENSIONS)}"
+        )
     contents = await file.read()
     return readiness_rater.rate_readiness(contents, file.filename)
 
-@router.post("/profile-fields")
+@router.post(AGENT_ROUTES['profile_fields'])
 async def profile_fields_endpoint(file: UploadFile = File(...)):
     """
     Endpoint for the Field Profiler agent.
     Accepts CSV and Excel files.
     """
-    supported_formats = ('.csv', '.xlsx', '.xls')
-    if not file.filename.endswith(supported_formats):
-        raise HTTPException(status_code=400, detail="Unsupported file format.")
+    file_extension = file.filename.split('.')[-1].lower()
+    if file_extension not in SUPPORTED_FILE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Supported types are: {', '.join(SUPPORTED_FILE_EXTENSIONS)}"
+        )
     contents = await file.read()
     return field_profiler.profile_fields(contents, file.filename)
 
-@router.post("/detect-drift")
+@router.post(AGENT_ROUTES['detect_drift'])
 async def detect_drift_endpoint(baseline_file: UploadFile = File(...), current_file: UploadFile = File(...)):
     """
     Endpoint for the Drift Detector agent. Requires two CSV file uploads.
     """
-    if not baseline_file.filename.endswith('.csv') or not current_file.filename.endswith('.csv'):
-        raise HTTPException(status_code=400, detail="Drift detection currently supports CSV files only.")
+    baseline_file_extension = baseline_file.filename.split('.')[-1].lower()
+    current_file_extension = current_file.filename.split('.')[-1].lower()
+    if baseline_file_extension not in SUPPORTED_FILE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Supported types are: {', '.join(SUPPORTED_FILE_EXTENSIONS)}")
+    if current_file_extension not in SUPPORTED_FILE_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file type. Supported types are: {', '.join(SUPPORTED_FILE_EXTENSIONS)}")
     
     baseline_contents = await baseline_file.read()
     current_contents = await current_file.read()
     # Using one filename as a representative name for the analysis
-    return drift_detector.detect_drift(baseline_contents, current_contents, baseline_file.filename)
-
-@router.post("/deduplicate")
-def deduplicate_endpoint(items: list[str]):
-    """
-    Simple endpoint for the deduplication agent.
-    """
-    return dedup_agent.deduplicate(items)
+    return drift_detector.detect_drift(baseline_contents, current_contents, baseline_file.filename,current_file.filename)
 

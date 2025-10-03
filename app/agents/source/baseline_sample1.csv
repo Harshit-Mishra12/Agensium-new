@@ -1,0 +1,9 @@
+TransactionID,ProductID,Price,Quantity,Category,Region
+1,P101,50.00,2,Electronics,North
+2,P102,15.50,5,Apparel,North
+3,P103,200.00,1,Electronics,South
+4,P104,25.00,3,Home Goods,West
+5,P105,150.00,1,Electronics,East
+6,P102,16.00,4,Apparel,South
+7,P104,25.00,2,Home Goods,West
+8,P101,52.50,3,Electronics,North

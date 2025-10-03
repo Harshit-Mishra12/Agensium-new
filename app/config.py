@@ -6,6 +6,7 @@ AGENT_ROUTES = {
     "detect_drift": "/detect-drift",
 
     # Tool / Orchestrator Endpoints
+    'profile_my_data_tool': "/run-tool/profile-my-data",
     "clean_data_tool": "/run-tool/cleaner",
     'define_data_tool': "/run-tool/definer",
     # Add other tool endpoints here, e.g., "profile_my_data_tool": "/profile-my-data"

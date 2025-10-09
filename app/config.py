@@ -10,4 +10,8 @@ AGENT_ROUTES = {
     "clean_data_tool": "/run-tool/cleaner",
     'define_data_tool': "/run-tool/definer",
     # Add other tool endpoints here, e.g., "profile_my_data_tool": "/profile-my-data"
+
+    # Shared Agent Endpoints
+    "chat_with_data": "/agents/chat-with-data",
+    
 }

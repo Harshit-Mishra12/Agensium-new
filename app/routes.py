@@ -1,7 +1,9 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends,Body
 from typing import Optional, List, Any
 from app.config import AGENT_ROUTES
 from app.agents.source import schema_scanner, readiness_rater, field_profiler, drift_detector, dedup_agent
+from app.agents.shared import chat_agent
+import json
 
 # --- New imports for the Smart Orchestration Engine ---
 from app.tools.profile_my_data_orchestrator import run_workflow
@@ -61,10 +63,7 @@ async def profile_fields_endpoint(file: UploadFile = File(...)):
     return field_profiler.profile_fields(contents, file.filename)
 
 @router.post(AGENT_ROUTES['detect_drift'])
-async def detect_drift_endpoint(
-    current_file: UploadFile = File(...),
-    baseline_file: UploadFile = File(...)
-):
+async def detect_drift_endpoint(current_file: UploadFile = File(...),baseline_file: UploadFile = File(...)):
     """Endpoint for the Drift Detector agent."""
     current_contents = await current_file.read()
     baseline_contents = await baseline_file.read()
@@ -74,3 +73,14 @@ async def detect_drift_endpoint(
         baseline_filename=baseline_file.filename,
         current_filename=current_file.filename
     )
+
+@router.post(AGENT_ROUTES['chat_with_data'])
+def chat_with_data_endpoint(agent_report: str = Form(...), user_question: str = Form(...)):
+    """Endpoint for the Chat With Data agent."""
+    try:
+        # Since form data comes in as strings, we need to parse the JSON report string back into a dictionary
+        report_dict = json.loads(agent_report)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format for agent_report.")
+
+    return chat_agent.answer_question_on_report(agent_report=report_dict, user_question=user_question)

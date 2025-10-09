@@ -23,6 +23,7 @@ env/
 .ipynb_checkpoints/
 
 # IDEs / editors
+.env
 .vscode/
 .idea/
 *.sublime-project

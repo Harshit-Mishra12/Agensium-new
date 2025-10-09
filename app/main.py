@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from app import routes
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
+load_dotenv() 
 app = FastAPI(title="Data Agents Platform 🚀")
 origins = [
     "http://localhost:3000",  # For Create React App

@@ -1,0 +1,26 @@
+ProductID,ProductName,Category,StockQuantity,Price,Supplier,DateAdded
+PROD-101,Quantum-Leap Laptop,Electronics,50,1299.99,InnovatePC,2025-09-01
+PROD-102,Stellar-Glow Monitor,Electronics,75,349.50,ViewBright,2025-09-01
+PROD-103,Ergo-Flow Keyboard,Accessories,150,89.99,TypeWell,2025-09-02
+PROD-104,Acoustic-Pulse Headphones,Audio,200,199.99,SoundSphere,2025-09-03
+PROD-105,Data-Stream Router,Networking,120,119.00,ConnectFast,2025-09-04
+PROD-201,Eco-Blend Coffee Beans,Groceries,500,22.50,JavaHouse,2025-09-05
+PROD-202,Organic Green Tea,Groceries,450,15.75,SteepPure,2025-09-05
+PROD-301,The Data Alchemist,Books,300,29.99,PageTurn Press,2025-09-06
+PROD-302,Code Complete 2,Books,250,39.99,DevReads,2025-09-07
+PROD-106,Quantum-Leap Laptop Pro,Electronics,30,1899.99,InnovatePC,2025-09-08
+PROD-401,Flex-Fit Yoga Mat,Sports,180,45.00,ActiveLife,2025-09-09
+PROD-402,Hydro-Flask Water Bottle,Sports,400,35.50,ActiveLife,2025-09-10
+PROD-107,Silent-Click Mouse,Accessories,350,25.99,TypeWell,2025-09-11
+PROD-203,Artisan Sourdough Bread,Groceries,100,8.99,BakeryFresh,2025-09-12
+PROD-501,Modern Art Print "Data Flow",Home Decor,80,150.00,CanvasCreations,2025-09-13
+PROD-502,Ergonomic Office Chair,Furniture,40,450.00,SitSmart,2025-09-14
+PROD-108,HD Webcam Pro,Accessories,220,79.99,ViewBright,2025-09-15
+PROD-403,Adjustable Dumbbell Set,Sports,90,299.00,FitStrong,2025-09-16
+PROD-303,The Phoenix Project,Books,180,24.99,DevReads,2025-09-17
+PROD-109,Stellar-Glow Ultrawide,Electronics,45,799.00,ViewBright,2025-09-18
+PROD-204,Gourmet Olive Oil,Groceries,250,18.00,TasteOfItaly,2025-09-19
+PROD-503,LED Desk Lamp,Home Decor,300,55.50,LightUp,2025-09-20
+PROD-404,Resistance Bands Set,Sports,500,19.99,FitStrong,2025-09-21
+PROD-110,Docking Station Pro,Accessories,150,129.99,ConnectFast,2025-09-22
+PROD-504,Standing Desk Converter,Furniture,60,250.00,SitSmart,2025-09-23

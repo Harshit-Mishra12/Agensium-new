@@ -1,0 +1,14 @@
+EmployeeID,Full_Name,email,phone_number,StreetAddress,City,State,ZipCode,Department,Position,StartDate,Salary,ssn,DateOfBirth,IsActive
+E1001,Alice Johnson,alice.j@examplecorp.com,555-0101,"123 Oak St",Metropolis,NY,10001,Engineering,Software Engineer,2023-01-15,95000,111-22-3333,1990-05-20,True
+E1002,Bob Williams,bob.w@examplecorp.com,555-0102,"456 Pine Ave",Gotham,CA,90210,Marketing,Marketing Manager,2022-03-10,82000,222-33-4444,1985-11-30,True
+E1003,Charlie Brown,charlie.b@examplecorp.com,555-0103,"789 Maple Dr",Star City,TX,75001,Sales,Sales Associate,2023-02-20,68000,333-44-5555,1992-08-15,False
+E1004,Diana Miller,diana.m@examplecorp.com,555-0104,"101 Birch Blvd",Central City,FL,33101,Engineering,QA Tester,2021-07-01,75000,444-55-6666,1988-02-10,True
+E1005,Eve Davis,eve.d@examplecorp.com,555-0105,"212 Cedar Ln",Coast City,CA,94101,HR,HR Generalist,2023-05-12,71000,555-66-7777,1995-04-25,True
+E1006,Frank Garcia,frank.g@examplecorp.com,555-0106,"333 Elm Ct",Keystone City,PA,19101,Sales,Account Executive,2020-11-05,92000,666-77-8888,1983-09-05,True
+E1007,Grace Rodriguez,grace.r@examplecorp.com,555-0107,"444 Spruce Pkwy",Fawcett City,OH,43001,Marketing,Content Strategist,2022-09-01,78000,777-88-9999,1991-07-22,False
+E1008,Heidi Martinez,heidi.m@examplecorp.com,555-0108,"555 Willow Way",Opal City,IL,60601,Engineering,DevOps Engineer,2023-08-01,105000,888-99-0000,1989-12-12,True
+E1009,Ivan Hernandez,ivan.h@examplecorp.com,555-0109,"666 Aspen Pl",Bludhaven,NJ,07001,IT,System Administrator,2019-06-18,88000,999-00-1111,1980-03-03,True
+E1010,Judy Lopez,judy.l@examplecorp.com,555-0110,"777 Redwood Cir",Ivy Town,CT,06101,Sales,Sales Manager,2018-10-22,115000,000-11-2222,1978-10-18,True
+E1011,Kevin Gonzalez,kevin.g@examplecorp.com,555-0111,"888 Sequoia Ave",Gateway City,MO,63101,Marketing,SEO Specialist,2023-03-15,72000,111-23-4567,1994-06-08,True
+E1012,Linda Wilson,linda.w@examplecorp.com,555-0112,"999 Juniper St",Midway City,MI,48201,HR,Recruiter,2022-11-20,70000,222-34-5678,1993-01-30,True
+E10

@@ -4,7 +4,7 @@ import os
 import time
 import json
 import base64
-from typing import Dict, Any
+from typing import Dict, Any, List
 import pandas as pd
 import numpy as np
 from fastapi import HTTPException
@@ -15,9 +15,9 @@ from app.config import AGENT_ROUTES
 AGENT_VERSION = "1.1.0"  # Version bump for architecture alignment
 
 
-def _process_sheet(df: pd.DataFrame, sheet_name: str) -> Dict[str, Any]:
+def _process_sheet(df: pd.DataFrame, key_column: str, sheet_name: str) -> Dict[str, Any]:
     """
-    Process a single sheet/dataframe by identifying exact full-row duplicates.
+    Process a single sheet/dataframe by resolving entities based on key_column.
     Returns the result structure for this sheet.
     """
     if df.empty:
@@ -28,67 +28,79 @@ def _process_sheet(df: pd.DataFrame, sheet_name: str) -> Dict[str, Any]:
             "routing": {
                 "status": "Ready",
                 "reason": "Sheet is empty.",
-                "suggestion": "Proceed to ComplianceTagger on non-empty sheets.",
-                "suggested_agent_endpoint": AGENT_ROUTES.get("compliance_tagger"),
+                "suggestion": "Run DedupAgent on non-empty sheets.",
+                "suggested_agent_endpoint": AGENT_ROUTES.get("deduplicate"),
             },
             "data": {
-                "original_row_count": 0,
-                "duplicate_row_count": 0,
-                "final_row_count": 0,
+                "duplicate_entity_count": 0,
+                "key_column": key_column,
                 "duplicate_sample": [],
             }
         }
     
-    original_row_count = int(len(df))
-    dup_mask = df.duplicated(keep="first")
-    duplicate_row_count = int(dup_mask.sum())
-    final_row_count = int((~dup_mask).sum())
+    if key_column not in df.columns:
+        raise ValueError(f"Key column '{key_column}' not found in sheet '{sheet_name}'.")
     
-    # Prepare a JSON-serializable sample of duplicate rows
-    duplicate_sample_df = df[dup_mask].head(10)
-    serializable_sample_json = duplicate_sample_df.to_json(orient="records", default_handler=str)
-    duplicate_sample = json.loads(serializable_sample_json)
+    if len(df.columns) == 0:
+        raise ValueError(f"Sheet '{sheet_name}' has no columns.")
     
-    if duplicate_row_count > 0 and original_row_count > 0:
-        pct = round((duplicate_row_count / original_row_count) * 100, 2)
+    primary_key_col = df.columns[0]
+    
+    # Group by key_column and find groups with >1 unique primary key
+    grouped = df.groupby(key_column, dropna=False)[primary_key_col].nunique()
+    dup_keys = grouped[grouped > 1]
+    duplicate_entity_count = int(dup_keys.shape[0])
+    
+    # Build a small sample of duplicate groups
+    duplicate_sample: List[Dict[str, Any]] = []
+    if duplicate_entity_count > 0:
+        for k in dup_keys.head(5).index:
+            subset = df[df[key_column] == k]
+            duplicate_sample.append(
+                {
+                    key_column: k if pd.notna(k) else None,
+                    "primary_keys": sorted(pd.unique(subset[primary_key_col].dropna().astype(str)))[:10],
+                    "rows": int(len(subset)),
+                }
+            )
+    
+    if duplicate_entity_count > 0:
         alerts = [
             {
                 "level": "warning",
-                "message": f"Detected {duplicate_row_count} exact duplicate rows (" \
-                           f"{pct}% of {original_row_count} records).",
+                "message": f"Found {duplicate_entity_count} potential duplicate entities based on the key '{key_column}'. Manual review is recommended.",
             }
         ]
         routing = {
             "status": "Needs Review",
-            "reason": "Exact duplicate records detected.",
-            "suggestion": "Run a data cleaning tool to remove duplicates.",
+            "reason": "Multiple primary keys mapped to the same entity key.",
+            "suggestion": "Run a cleaning or mastering tool to consolidate duplicates.",
             "suggested_agent_endpoint": AGENT_ROUTES.get("clean_data_tool"),
         }
     else:
         alerts = [
             {
                 "level": "info",
-                "message": "No exact duplicate rows found.",
+                "message": "No duplicate entities found.",
             }
         ]
         routing = {
             "status": "Ready",
-            "reason": "No full-row duplicates present.",
-            "suggestion": "Proceed to ComplianceTagger to scan for potential PII.",
-            "suggested_agent_endpoint": AGENT_ROUTES.get("compliance_tagger"),
+            "reason": "No entity-level duplicates detected for the chosen key.",
+            "suggestion": "Proceed to DedupAgent to check for full-row duplicates.",
+            "suggested_agent_endpoint": AGENT_ROUTES.get("deduplicate"),
         }
     
     data_payload = {
-        "original_row_count": original_row_count,
-        "duplicate_row_count": duplicate_row_count,
-        "final_row_count": final_row_count,
+        "duplicate_entity_count": duplicate_entity_count,
+        "key_column": key_column,
         "duplicate_sample": duplicate_sample,
     }
     
     return {
         "status": "success",
         "metadata": {
-            "total_rows": original_row_count,
+            "total_rows": int(len(df)),
             "columns": list(df.columns),
         },
         "alerts": alerts,
@@ -97,11 +109,11 @@ def _process_sheet(df: pd.DataFrame, sheet_name: str) -> Dict[str, Any]:
     }
 
 
-def deduplicate(file_contents: bytes, filename: str) -> Dict[str, Any]:
+def resolve_entities(file_contents: bytes, filename: str, key_column: str) -> Dict[str, Any]:
     """
-    Compute: Identify exact full-row duplicates (excluding the first occurrence) across CSV/Excel files.
-    Explain: Warn if duplicates; info otherwise.
-    Decide: If duplicates -> Needs Review (clean_data_tool); else Ready -> ComplianceTagger.
+    Compute: Group by key_column and find groups with >1 unique primary key (first column) across CSV/Excel files.
+    Explain: Warn if duplicates found, else info.
+    Decide: Needs Review -> clean_data_tool; otherwise Ready -> DedupAgent.
     Returns: Stats + updated file content for orchestration workflows.
     """
     start = time.perf_counter()
@@ -114,7 +126,7 @@ def deduplicate(file_contents: bytes, filename: str) -> Dict[str, Any]:
         if file_extension == 'csv':
             df = pd.read_csv(io.BytesIO(file_contents))
             sheet_name = os.path.splitext(os.path.basename(filename))[0]
-            results[sheet_name] = _process_sheet(df, sheet_name)
+            results[sheet_name] = _process_sheet(df, key_column, sheet_name)
             
             # Generate updated CSV file (no modifications, just pass through)
             output_buffer = io.BytesIO()
@@ -130,7 +142,7 @@ def deduplicate(file_contents: bytes, filename: str) -> Dict[str, Any]:
             
             # Process each sheet
             for sheet_name, df in excel_sheets.items():
-                results[sheet_name] = _process_sheet(df, sheet_name)
+                results[sheet_name] = _process_sheet(df, key_column, sheet_name)
             
             # Generate updated Excel file (no modifications, just pass through)
             output_buffer = io.BytesIO()
@@ -152,7 +164,7 @@ def deduplicate(file_contents: bytes, filename: str) -> Dict[str, Any]:
         
         return {
             "source_file": os.path.basename(filename),
-            "agent": "DedupAgent",
+            "agent": "EntityResolver",
             "audit": {
                 "profile_date": datetime.utcnow().isoformat() + "Z",
                 "agent_version": AGENT_VERSION,
@@ -170,4 +182,4 @@ def deduplicate(file_contents: bytes, filename: str) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"DedupAgent failed: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"EntityResolver failed: {str(e)}")

@@ -44,3 +44,33 @@ PROFILE_MY_DATA_WORKFLOW = {
         }
     ]
 }
+
+# --- Master My Data Workflow ---
+# This workflow establishes data lineage, resolves entities, deduplicates, and checks compliance.
+
+MASTER_MY_DATA_WORKFLOW = {
+    "name": "MasterMyData",
+    "steps": [
+        {
+            "agent_name": "source_tagger",
+            "inputs": {"file": "current_file", "source_system": "source_system"},
+            "passes_file": True  # This agent returns an updated file for the next agent
+        },
+        {
+            "agent_name": "entity_resolver",
+            "inputs": {"file": "updated_file", "key_column": "key_column"},
+            "passes_file": True,  # Pass the file to the next agent
+            "optional": False
+        },
+        {
+            "agent_name": "deduplicator",
+            "inputs": {"file": "current_file"},
+            "passes_file": True  # Pass the file to the next agent
+        },
+        {
+            "agent_name": "compliance_tagger",
+            "inputs": {"file": "current_file"},
+            "passes_file": False  # Last agent, no need to pass file
+        }
+    ]
+}

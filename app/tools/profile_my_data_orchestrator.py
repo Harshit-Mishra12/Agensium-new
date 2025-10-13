@@ -99,16 +99,22 @@ def run_workflow(workflow_def: dict, files: dict):
 
     # If the workflow completes without stopping, assemble the full report
     final_report = _assemble_final_report(results_context)
-    final_report["audit"] = {
-        "profile_date": datetime.now(timezone.utc).isoformat(),
-        "agent_version": TOOL_VERSION,
-        "compute_time_seconds": round(time.time() - start_time, 2),
-        "workflow_status": "Completed"
-    }
+    # final_report["audit"] = {
+    #     "profile_date": datetime.now(timezone.utc).isoformat(),
+    #     "agent_version": TOOL_VERSION,
+    #     "compute_time_seconds": round(time.time() - start_time, 2),
+    #     "workflow_status": "Completed"
+    # }
 
     return {
         "source_file": files["current_file"]["filename"],
         "tool": workflow_def["name"],
+        "audit": {        
+            "profile_date": datetime.now(timezone.utc).isoformat(),
+            "agent_version": TOOL_VERSION,
+            "compute_time_seconds": round(time.time() - start_time, 2),
+            "workflow_status": "Completed"
+        },
         "report": final_report
     }
 

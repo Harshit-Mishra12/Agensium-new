@@ -1,10 +1,11 @@
 from datetime import datetime
 import io
 import os
+import re
 import time
 import json
 import base64
-from typing import Dict, Any
+from typing import Dict, Any, List
 import pandas as pd
 import numpy as np
 from fastapi import HTTPException
@@ -15,81 +16,70 @@ from app.config import AGENT_ROUTES
 AGENT_VERSION = "1.1.0"  # Version bump for architecture alignment
 
 
+PII_PATTERNS = {
+    "Email": re.compile(r"e-?mail", re.IGNORECASE),
+    "PhoneNumber": re.compile(r"phone|contact.*num", re.IGNORECASE),
+    "SSN": re.compile(r"ssn|social.*sec", re.IGNORECASE),
+    "Address": re.compile(r"address|street", re.IGNORECASE),
+    "DateOfBirth": re.compile(r"dob|birth.*date", re.IGNORECASE),
+    "Name": re.compile(r"name|full.*name|user.*name", re.IGNORECASE),
+}
+
+
 def _process_sheet(df: pd.DataFrame, sheet_name: str) -> Dict[str, Any]:
     """
-    Process a single sheet/dataframe by identifying exact full-row duplicates.
+    Process a single sheet/dataframe by scanning headers for PII patterns.
     Returns the result structure for this sheet.
     """
-    if df.empty:
-        return {
-            "status": "success",
-            "metadata": {"total_rows": 0},
-            "alerts": [{"level": "info", "message": f"Sheet '{sheet_name}' is empty."}],
-            "routing": {
-                "status": "Ready",
-                "reason": "Sheet is empty.",
-                "suggestion": "Proceed to ComplianceTagger on non-empty sheets.",
-                "suggested_agent_endpoint": AGENT_ROUTES.get("compliance_tagger"),
-            },
-            "data": {
-                "original_row_count": 0,
-                "duplicate_row_count": 0,
-                "final_row_count": 0,
-                "duplicate_sample": [],
-            }
-        }
+    columns = list(df.columns)
     
-    original_row_count = int(len(df))
-    dup_mask = df.duplicated(keep="first")
-    duplicate_row_count = int(dup_mask.sum())
-    final_row_count = int((~dup_mask).sum())
+    flagged: List[Dict[str, Any]] = []
+    for col in columns:
+        for pii_type, pattern in PII_PATTERNS.items():
+            if pattern.search(str(col)):
+                flagged.append({
+                    "field": col,
+                    "suspected_pii_type": pii_type,
+                })
+                break  # first match is sufficient
     
-    # Prepare a JSON-serializable sample of duplicate rows
-    duplicate_sample_df = df[dup_mask].head(10)
-    serializable_sample_json = duplicate_sample_df.to_json(orient="records", default_handler=str)
-    duplicate_sample = json.loads(serializable_sample_json)
-    
-    if duplicate_row_count > 0 and original_row_count > 0:
-        pct = round((duplicate_row_count / original_row_count) * 100, 2)
+    count = len(flagged)
+    if count > 0:
         alerts = [
             {
-                "level": "warning",
-                "message": f"Detected {duplicate_row_count} exact duplicate rows (" \
-                           f"{pct}% of {original_row_count} records).",
+                "level": "critical",
+                "message": f"Found {count} field(s) suspected of containing sensitive PII data. Manual review is required.",
             }
         ]
         routing = {
             "status": "Needs Review",
-            "reason": "Exact duplicate records detected.",
-            "suggestion": "Run a data cleaning tool to remove duplicates.",
-            "suggested_agent_endpoint": AGENT_ROUTES.get("clean_data_tool"),
+            "reason": "Potential PII fields detected in schema.",
+            "suggestion": "Run governance review and apply necessary protections.",
+            "suggested_agent_endpoint": AGENT_ROUTES.get("govern_data_tool"),
         }
     else:
         alerts = [
             {
                 "level": "info",
-                "message": "No exact duplicate rows found.",
+                "message": "No PII-suspect fields detected by header scan.",
             }
         ]
         routing = {
             "status": "Ready",
-            "reason": "No full-row duplicates present.",
-            "suggestion": "Proceed to ComplianceTagger to scan for potential PII.",
-            "suggested_agent_endpoint": AGENT_ROUTES.get("compliance_tagger"),
+            "reason": "No sensitive columns suspected based on provided patterns.",
+            "suggestion": "No further compliance action required.",
+            "suggested_agent_endpoint": None,
         }
     
     data_payload = {
-        "original_row_count": original_row_count,
-        "duplicate_row_count": duplicate_row_count,
-        "final_row_count": final_row_count,
-        "duplicate_sample": duplicate_sample,
+        "flagged_columns": flagged,
     }
     
     return {
         "status": "success",
         "metadata": {
-            "total_rows": original_row_count,
-            "columns": list(df.columns),
+            "total_rows": int(len(df)),
+            "columns": columns,
         },
         "alerts": alerts,
         "routing": routing,
@@ -97,11 +87,11 @@ def _process_sheet(df: pd.DataFrame, sheet_name: str) -> Dict[str, Any]:
     }
 
 
-def deduplicate(file_contents: bytes, filename: str) -> Dict[str, Any]:
+def tag_compliance(file_contents: bytes, filename: str) -> Dict[str, Any]:
     """
-    Compute: Identify exact full-row duplicates (excluding the first occurrence) across CSV/Excel files.
-    Explain: Warn if duplicates; info otherwise.
-    Decide: If duplicates -> Needs Review (clean_data_tool); else Ready -> ComplianceTagger.
+    Compute: Read headers and flag columns suspected to contain PII based on name patterns across CSV/Excel files.
+    Explain: Critical alert if PII suspected; info otherwise.
+    Decide: If PII -> Needs Review (govern_data_tool); else Ready.
     Returns: Stats + updated file content for orchestration workflows.
     """
     start = time.perf_counter()
@@ -152,7 +142,7 @@ def deduplicate(file_contents: bytes, filename: str) -> Dict[str, Any]:
         
         return {
             "source_file": os.path.basename(filename),
-            "agent": "DedupAgent",
+            "agent": "ComplianceTagger",
             "audit": {
                 "profile_date": datetime.utcnow().isoformat() + "Z",
                 "agent_version": AGENT_VERSION,
@@ -170,4 +160,4 @@ def deduplicate(file_contents: bytes, filename: str) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"DedupAgent failed: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"ComplianceTagger failed: {str(e)}")

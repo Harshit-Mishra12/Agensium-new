@@ -1,0 +1,101 @@
+CustomerID,FullName,EmailAddress,PhoneNumber,LastSeenDate,City,SourceSystem
+CUST-1001,Jane Doe,jane.doe@email.com,555-0101,2025-10-01,New York,CRM
+CUST-1002,John Smith,john.smith@email.com,555-0102,2025-10-02,Los Angeles,Billing
+CUST-1003,Alice Johnson,alice.j@email.com,555-0103,2025-10-03,Chicago,Marketing
+CUST-1004,Bob Williams,bob.w@email.com,555-0104,2025-10-04,Houston,CRM
+CUST-1005,Charlie Brown,charlie.b@email.com,555-0105,2025-10-05,Phoenix,Billing
+CUST-1006,Diana Miller,diana.m@email.com,555-0106,2025-10-06,Philadelphia,Marketing
+CUST-1007,Eve Davis,eve.d@email.com,555-0107,2025-10-07,San Antonio,CRM
+CUST-1008,Frank Garcia,frank.g@email.com,555-0108,2025-10-08,San Diego,Billing
+CUST-1009,Grace Rodriguez,grace.r@email.com,555-0109,2025-10-09,Dallas,Marketing
+CUST-1010,Heidi Martinez,heidi.m@email.com,555-0110,2025-10-10,San Jose,CRM
+CUST-1011,Ivan Hernandez,ivan.h@email.com,555-0111,2025-10-11,Austin,Billing
+CUST-1012,Judy Lopez,judy.l@email.com,555-0112,2025-10-12,Jacksonville,Marketing
+CUST-1013,Kevin Gonzalez,kevin.g@email.com,555-0113,2025-10-13,Fort Worth,CRM
+CUST-1014,Linda Wilson,linda.w@email.com,555-0114,2025-10-14,Columbus,Billing
+CUST-1015,Mike Anderson,mike.a@email.com,555-0115,2025-10-15,Charlotte,Marketing
+CUST-1016,Nancy Thomas,nancy.t@email.com,555-0116,2025-10-16,San Francisco,CRM
+CUST-1017,Olivia Jackson,olivia.j@email.com,555-0117,2025-10-17,Indianapolis,Billing
+CUST-1018,Peter White,peter.w@email.com,555-0118,2025-10-18,Seattle,Marketing
+CUST-1019,Quincy Harris,quincy.h@email.com,555-0119,2025-10-19,Denver,CRM
+CUST-1020,Rachel Martin,rachel.m@email.com,555-0120,2025-10-20,Washington,Billing
+CUST-1021,Sam Thompson,sam.t@email.com,555-0121,2025-10-21,Boston,Marketing
+CUST-1022,Tina Garcia,tina.g@email.com,555-0122,2025-10-22,El Paso,CRM
+CUST-1023,Uma Martinez,uma.m@email.com,555-0123,2025-10-23,Detroit,Billing
+CUST-1024,Victor Robinson,victor.r@email.com,555-0124,2025-10-24,Nashville,Marketing
+CUST-1025,Wendy Clark,wendy.c@email.com,555-0125,2025-10-25,Portland,CRM
+CUST-1026,Xander Rodriguez,xander.r@email.com,555-0126,2025-10-26,Memphis,Billing
+CUST-1027,Yara Lewis,yara.l@email.com,555-0127,2025-10-27,Oklahoma City,Marketing
+CUST-1028,Zane Lee,zane.l@email.com,555-0128,2025-10-28,Las Vegas,CRM
+CUST-1029,Amy Walker,amy.w@email.com,555-0129,2025-10-29,Louisville,Billing
+CUST-1030,Ben Hall,ben.h@email.com,555-0130,2025-10-30,Baltimore,Marketing
+CUST-1031,Cathy Allen,cathy.a@email.com,555-0131,2025-11-01,Milwaukee,CRM
+CUST-1032,David Young,david.y@email.com,555-0132,2025-11-02,Albuquerque,Billing
+CUST-1033,Emily Hernandez,emily.h@email.com,555-0133,2025-11-03,Tucson,Marketing
+CUST-1034,Fred King,fred.k@email.com,555-0134,2025-11-04,Fresno,CRM
+CUST-1035,Gina Wright,gina.w@email.com,555-0135,2025-11-05,Sacramento,Billing
+CUST-1036,Harry Scott,harry.s@email.com,555-0136,2025-11-06,Kansas City,Marketing
+CUST-1037,Iris Green,iris.g@email.com,555-0137,2025-11-07,Long Beach,CRM
+CUST-1038,Jack Adams,jack.a@email.com,555-0138,2025-11-08,Mesa,Billing
+CUST-1039,Karen Baker,karen.b@email.com,555-0139,2025-11-09,Atlanta,Marketing
+CUST-1040,Larry Nelson,larry.n@email.com,555-0140,2025-11-10,Virginia Beach,CRM
+CUST-1041,Mary Carter,mary.c@email.com,555-0141,2025-11-11,Omaha,Billing
+CUST-1042,Nate Mitchell,nate.m@email.com,555-0142,2025-11-12,Raleigh,Marketing
+CUST-1043,Olga Perez,olga.p@email.com,555-0143,2025-11-13,Miami,CRM
+CUST-1044,Paul Roberts,paul.r@email.com,555-0144,2025-11-14,Minneapolis,Billing
+CUST-1045,Queen Turner,queen.t@email.com,555-0145,2025-11-15,Tulsa,Marketing
+CUST-1046,Rick Phillips,rick.p@email.com,555-0146,2025-11-16,Oakland,CRM
+CUST-1047,Sue Campbell,sue.c@email.com,555-0147,2025-11-17,Wichita,Billing
+CUST-1048,Tom Parker,tom.p@email.com,555-0148,2025-11-18,New Orleans,Marketing
+CUST-1049,Ursula Evans,ursula.e@email.com,555-0149,2025-11-19,Arlington,CRM
+CUST-1050,Vince Edwards,vince.e@email.com,555-0150,2025-11-20,Tampa,Billing
+CUST-1051,Will Collins,will.c@email.com,555-0151,2025-11-21,Honolulu,Marketing
+CUST-1052,Xena Stewart,xena.s@email.com,555-0152,2025-11-22,Aurora,CRM
+CUST-1053,Yancy Sanchez,yancy.s@email.com,555-0153,2025-11-23,Anaheim,Billing
+CUST-1054,Zelda Morris,zelda.m@email.com,555-0154,2025-11-24,Santa Ana,Marketing
+CUST-1055,Aaron Rogers,aaron.r@email.com,555-0155,2025-11-25,Riverside,CRM
+CUST-1056,Betty Reed,betty.r@email.com,555-0156,2025-11-26,Corpus Christi,Billing
+CUST-1057,Carl Cook,carl.c@email.com,555-0157,2025-11-27,Lexington,Marketing
+CUST-1058,Debra Morgan,debra.m@email.com,555-0158,2025-11-28,Stockton,CRM
+CUST-1059,Ed Bailey,ed.b@email.com,555-0159,2025-11-29,St. Paul,Billing
+CUST-1060,Fay Bell,fay.b@email.com,555-0160,2025-11-30,Cincinnati,Marketing
+CUST-1061,Gary Cooper,gary.c@email.com,555-0161,2025-12-01,Greensboro,CRM
+CUST-1062,Holly Richardson,holly.r@email.com,555-0162,2025-12-02,Pittsburgh,Billing
+CUST-1063,Ian Cox,ian.c@email.com,555-0163,2025-12-03,Plano,Marketing
+CUST-1064,Jill Howard,jill.h@email.com,555-0164,2025-12-04,Lincoln,CRM
+CUST-1065,Ken Ward,ken.w@email.com,555-0165,2025-12-05,St. Louis,Billing
+CUST-1066,Liz Brooks,liz.b@email.com,555-0166,2025-12-06,Orlando,Marketing
+CUST-1067,Matt Perry,matt.p@email.com,555-0167,2025-12-07,Irvine,CRM
+CUST-1068,Nina Hughes,nina.h@email.com,555-0168,2025-12-08,Jersey City,Billing
+CUST-1069,Oscar Price,oscar.p@email.com,555-0169,2025-12-09,Durham,Marketing
+CUST-1070,Patty Sanders,patty.s@email.com,555-0170,2025-12-10,Chula Vista,CRM
+CUST-1071,Randy Patterson,randy.p@email.com,555-0171,2025-12-11,Fort Wayne,Billing
+CUST-1072,Sandy Alexander,sandy.a@email.com,555-0172,2025-12-12,St. Petersburg,Marketing
+CUST-1073,Tim Hamilton,tim.h@email.com,555-0173,2025-12-13,Laredo,CRM
+CUST-1074,Valerie Graham,valerie.g@email.com,555-0174,2025-12-14,Buffalo,Billing
+CUST-1075,Walt Bryant,walt.b@email.com,555-0175,2025-12-15,Madison,Marketing
+CUST-1076,Zoe Sullivan,zoe.s@email.com,555-0176,2025-12-16,Chandler,CRM
+CUST-1077,Alex Wallace,alex.w@email.com,555-0177,2025-12-17,Gilbert,Billing
+CUST-1078,Billie Woods,billie.w@email.com,555-0178,2025-12-18,Reno,Marketing
+CUST-1079,Chris Cole,chris.c@email.com,555-0179,2025-12-19,North Las Vegas,CRM
+CUST-1080,Dana West,dana.w@email.com,555-0180,2025-12-20,Scottsdale,Billing
+CUST-1081,Eli Jordan,eli.j@email.com,555-0181,2025-12-21,Glendale,Marketing
+CUST-1082,Fiona Fisher,fiona.f@email.com,555-0182,2025-12-22,Huntsville,CRM
+CUST-1083,George Gordon,george.g@email.com,555-0183,2025-12-23,Tallahassee,Billing
+CUST-1084,Haley Harper,haley.h@email.com,555-0184,2025-12-24,Shreveport,Marketing
+CUST-1085,Ike Armstrong,ike.a@email.com,555-0185,2025-12-25,Augusta,CRM
+CUST-1086,Joy Carroll,joy.c@email.com,555-0186,2025-12-26,Mobile,Billing
+CUST-1087,Leo Chapman,leo.c@email.com,555-0187,2025-12-27,Grand Rapids,Marketing
+CUST-1088,Jane D.,jane.doe@email.com,555-0188,2025-12-28,New York,Marketing
+CUST-1089,Robert Williams,bob.w@email.com,555-0104,2025-12-29,Houston,Marketing
+CUST-1090,Alicia Johnson,alice.j@email.com,555-0189,2025-12-30,Chicago,CRM
+CUST-1091,Sam T.,sam.t@email.com,555-0121,2025-12-31,Boston,CRM
+CUST-1092,Tina G,tina.g@email.com,555-0122,2026-01-01,El Paso,Billing
+CUST-1093,Edward King,fred.k@email.com,555-0134,2026-01-02,Fresno,Marketing
+CUST-1094,Jack Adams,jack.a@email.com,555-0190,2026-01-03,Mesa,CRM
+CUST-1095,Paul R,paul.r@email.com,555-0144,2026-01-04,Minneapolis,Marketing
+CUST-1096,Victor Robinson,victor.r@email.com,555-0191,2026-01-05,Nashville,Billing
+CUST-1097,Benny Hall,ben.h@email.com,555-0130,2026-01-06,Baltimore,CRM
+CUST-1098,Deb Morgan,debra.m@email.com,555-0158,2026-01-07,Stockton,Billing
+CUST-1099,Gary C,gary.c@email.com,555-0161,2026-01-08,Greensboro,Marketing
+CUST-1100,Fay Bell,fay.b@email.com,555-0192,2026-01-09,Cincinnati,CRM

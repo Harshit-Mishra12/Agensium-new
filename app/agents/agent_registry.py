@@ -1,4 +1,4 @@
-from app.agents.source import schema_scanner, readiness_rater, field_profiler, drift_detector, dedup_agent
+from app.agents.source import schema_scanner, readiness_rater, field_profiler, drift_detector, dedup_agent, source_tagger, entity_resolver, compliance_tagger
 from app.agents.shared import chat_agent
 
 # This is the central registry for all agents in the system.
@@ -10,8 +10,12 @@ AGENT_REGISTRY = {
     "field_profiler": field_profiler.profile_fields,
     "drift_detector": drift_detector.detect_drift,
     "deduplicator": dedup_agent.deduplicate,
+    # Master My Data Agents
+    "source_tagger": source_tagger.tag_source,
+    "entity_resolver": entity_resolver.resolve_entities,
+    "compliance_tagger": compliance_tagger.tag_compliance,
     # As you build new agents (e.g., clean_data), you will register them here.
     # "clean_data_agent": clean_data.run,
-        # Shared/Utility Agents
+    # Shared/Utility Agents
     "chat_agent": chat_agent.answer_question_on_report
 }

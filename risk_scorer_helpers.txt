@@ -1,0 +1,112 @@
+# Helper functions to add to risk_scorer.py
+
+def _assess_field_risk(series: pd.Series, col_name: str, config: dict) -> dict:
+    """Assess risk for a single field/column."""
+    risk_factors = []
+    pii_types_detected = []
+    is_sensitive = False
+    governance_issues = []
+    risk_score = 0
+    
+    # Check field name for sensitive indicators
+    col_lower = col_name.lower()
+    for sensitive_term in SENSITIVE_FIELD_NAMES:
+        if sensitive_term in col_lower:
+            is_sensitive = True
+            risk_factors.append(f"Sensitive field name: '{col_name}' contains '{sensitive_term}'")
+            risk_score += 20
+            break
+    
+    # PII Detection in data values
+    if config.get('pii_detection_enabled', True):
+        sample_size = min(config.get('pii_sample_size', 100), len(series))
+        sample_data = series.dropna().astype(str).head(sample_size)
+        
+        for pii_type, pattern in PII_PATTERNS.items():
+            matches = sample_data.str.contains(pattern, regex=True, na=False)
+            if matches.any():
+                match_count = matches.sum()
+                pii_types_detected.append(pii_type)
+                risk_factors.append(f"PII detected: {pii_type} ({match_count} matches in sample)")
+                risk_score += 30
+    
+    # Governance checks
+    if config.get('governance_check_enabled', True):
+        # Check for missing governance fields
+        has_consent = any(term in col_lower for term in ['consent', 'opt_in', 'opt_out'])
+        has_classification = any(term in col_lower for term in ['classification', 'sensitivity', 'confidential'])
+        has_retention = any(term in col_lower for term in ['retention', 'expiry', 'deletion'])
+        
+        if pii_types_detected or is_sensitive:
+            if not has_consent:
+                governance_issues.append(f"Field '{col_name}' contains sensitive/PII data but no consent tracking detected")
+                risk_score += 15
+            if not has_classification:
+                governance_issues.append(f"Field '{col_name}' lacks data classification")
+                risk_score += 10
+    
+    # Determine risk level
+    if risk_score >= config.get('high_risk_threshold', 75):
+        risk_level = 'critical'
+    elif risk_score >= config.get('medium_risk_threshold', 50):
+        risk_level = 'high'
+    elif risk_score >= 25:
+        risk_level = 'medium'
+    else:
+        risk_level = 'low'
+    
+    # Build risk summary
+    if pii_types_detected:
+        risk_summary = f"PII detected: {', '.join(pii_types_detected)}"
+    elif is_sensitive:
+        risk_summary = f"Sensitive field detected"
+    elif governance_issues:
+        risk_summary = f"Governance gaps: {len(governance_issues)} issue(s)"
+    else:
+        risk_summary = "No significant risks detected"
+    
+    return {
+        "field_name": col_name,
+        "risk_score": risk_score,
+        "risk_level": risk_level,
+        "risk_summary": risk_summary,
+        "pii_detected": len(pii_types_detected) > 0,
+        "pii_types": pii_types_detected,
+        "is_sensitive": is_sensitive,
+        "governance_issues": governance_issues,
+        "risk_factors": risk_factors
+    }
+
+
+def _calculate_overall_risk_score(field_risks: dict) -> int:
+    """Calculate overall risk score from field risks."""
+    if not field_risks:
+        return 0
+    
+    total_score = sum(risk['risk_score'] for risk in field_risks.values())
+    return round(total_score / len(field_risks))
+
+
+def _determine_routing(risk_score: int, pii_count: int, governance_gaps_count: int) -> dict:
+    """Determine routing based on risk assessment."""
+    if risk_score >= 75 or pii_count > 0:
+        return {
+            "status": "High Risk",
+            "reason": f"Critical risks detected (score: {risk_score}, PII fields: {pii_count})",
+            "suggestion": "Immediate action required: Review PII handling, implement data governance, ensure compliance",
+            "suggested_agent_endpoint": AGENT_ROUTES.get("govern_data_tool", "/run-tool/governance")
+        }
+    elif risk_score >= 50 or governance_gaps_count > 0:
+        return {
+            "status": "Medium Risk",
+            "reason": f"Moderate risks detected (score: {risk_score}, governance gaps: {governance_gaps_count})",
+            "suggestion": "Review and address governance gaps, implement data classification",
+            "suggested_agent_endpoint": AGENT_ROUTES.get("govern_data_tool", "/run-tool/governance")
+        }
+    else:
+        return {
+            "status": "Low Risk",
+            "reason": "No significant risks detected",
+            "suggestion": "Continue monitoring data quality and governance",
+            "suggested_agent_endpoint": None
+        }

@@ -1,0 +1,25 @@
+{
+  "UnifiedProfiler": {
+    "null_alert_threshold": 20.0,
+    "categorical_threshold": 50,
+    "categorical_ratio_threshold": 0.5,
+    "top_n_values": 10,
+    "outlier_iqr_multiplier": 1.5,
+    "outlier_alert_threshold": 0.05
+  },
+  "ReadinessRater": {
+    "ready_threshold": 85,
+    "needs_review_threshold": 70,
+    "completeness_weight": 0.4,
+    "consistency_weight": 0.4,
+    "schema_health_weight": 0.2
+  },
+  "RiskScorer": {
+    "pii_sample_size": 100,
+    "high_risk_threshold": 75,
+    "medium_risk_threshold": 50,
+    "pii_detection_enabled": true,
+    "sensitive_field_detection_enabled": true,
+    "governance_check_enabled": true
+  }
+}

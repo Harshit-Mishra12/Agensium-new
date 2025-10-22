@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import io
 import time
+import base64
 import sqlparse
 from datetime import datetime, timezone
 from fastapi import HTTPException
@@ -11,7 +12,7 @@ from scipy.spatial.distance import jensenshannon
 # Import the central route registry
 from app.config import AGENT_ROUTES
 
-AGENT_VERSION = "1.3.1" # Version updated for bug fix
+AGENT_VERSION = "1.4.0" # Enhanced with audit trail and Excel export
 
 # --- Configuration for Drift Thresholds ---
 P_VALUE_THRESHOLD = 0.05
@@ -97,8 +98,8 @@ def _compare_sql_schemas(baseline_schema: dict, current_schema: dict):
     routing = {
         "status": "Needs Review" if alerts else "Ready",
         "reason": "Schema drift detected." if alerts else "No schema drift detected.",
-        "suggestion": "Review schema changes and update baseline definitions." if alerts else "Schemas are consistent.",
-        "suggested_agent_endpoint": AGENT_ROUTES.get('define_data_tool') if alerts else AGENT_ROUTES.get('clean_data_tool')
+        "suggestion": "Review schema changes and update baseline definitions." if alerts else "Proceed to master data tool for entity resolution and deduplication.",
+        "suggested_agent_endpoint": AGENT_ROUTES.get('define_data_tool') if alerts else AGENT_ROUTES.get('master_my_data_tool', '/run-tool/master-my-data')
     }
 
     return {
@@ -187,8 +188,8 @@ def _compare_dataframes(baseline_df: pd.DataFrame, current_df: pd.DataFrame):
     else:
         routing = {
             "status": "Ready", "reason": "No significant data drift detected.",
-            "suggestion": "Data appears consistent. As a next step, run the cleaning tool.",
-            "suggested_agent_endpoint": AGENT_ROUTES.get('clean_data_tool')
+            "suggestion": "Data appears consistent. Proceed to master data tool for entity resolution and deduplication.",
+            "suggested_agent_endpoint": AGENT_ROUTES.get('master_my_data_tool', '/run-tool/master-my-data')
         }
 
     return {
@@ -199,11 +200,30 @@ def _compare_dataframes(baseline_df: pd.DataFrame, current_df: pd.DataFrame):
 
 # --- Main Agent Function ---
 
-def detect_drift(baseline_contents: bytes, current_contents: bytes, baseline_filename: str, current_filename: str):
+def detect_drift(baseline_contents: bytes, current_contents: bytes, baseline_filename: str, current_filename: str, config: dict = None, user_overrides: dict = None):
     """
     Main function for the Drift Detector agent. Handles multiple file types.
+    
+    Args:
+        baseline_contents: Raw bytes of baseline file
+        current_contents: Raw bytes of current file
+        baseline_filename: Name of baseline file
+        current_filename: Name of current file
+        config: Configuration dictionary (optional)
+        user_overrides: User-provided overrides for audit trail (optional)
+    
+    Returns:
+        dict: Standardized JSON response with drift results, audit trail, and Excel export
     """
     start_time = time.time()
+    run_timestamp = datetime.now(timezone.utc)
+    
+    if config is None:
+        config = {
+            'p_value_threshold': P_VALUE_THRESHOLD,
+            'psi_alert_threshold': PSI_ALERT_THRESHOLD,
+            'psi_critical_threshold': PSI_CRITICAL_THRESHOLD
+        }
     
     baseline_ext = baseline_filename.split('.')[-1].lower()
     current_ext = current_filename.split('.')[-1].lower()
@@ -252,15 +272,208 @@ def detect_drift(baseline_contents: bytes, current_contents: bytes, baseline_fil
 
     end_time = time.time()
     compute_time = end_time - start_time
+    
+    # Extract audit trail data
+    all_fields_scanned = []
+    all_findings = []
+    total_alerts = 0
+    drift_detected_count = 0
+    
+    for sheet_result in results.values():
+        if sheet_result.get('status') == 'success':
+            total_alerts += len(sheet_result.get('alerts', []))
+            
+            # Extract fields from drift details
+            if 'data' in sheet_result:
+                if 'columns' in sheet_result['data']:
+                    all_fields_scanned.extend(sheet_result['data']['columns'].keys())
+                    for col, drift_info in sheet_result['data']['columns'].items():
+                        if drift_info.get('drift_detected'):
+                            drift_detected_count += 1
+                elif 'tables' in sheet_result['data']:
+                    all_fields_scanned.extend(sheet_result['data']['tables'].keys())
+            
+            # Extract findings
+            findings = _extract_findings_from_result(sheet_result)
+            all_findings.extend(findings)
+    
+    # Build comprehensive audit trail
+    audit_trail = {
+        "agent_name": "DriftDetector",
+        "timestamp": run_timestamp.isoformat(),
+        "profile_date": run_timestamp.isoformat(),
+        "agent_version": AGENT_VERSION,
+        "compute_time_seconds": round(compute_time, 2),
+        "fields_scanned": list(set(all_fields_scanned)),
+        "findings": all_findings,
+        "actions": [
+            f"Compared baseline '{baseline_filename}' with current '{current_filename}'",
+            f"Analyzed {len(results)} dataset(s) for drift",
+            f"Generated {total_alerts} alert(s)",
+            "Performed statistical drift detection (KS test for numeric, PSI for categorical)",
+            "Detected schema changes (new/dropped columns)",
+            f"Identified {drift_detected_count} field(s) with significant drift"
+        ],
+        "scores": {
+            "total_datasets_analyzed": len(results),
+            "total_alerts_generated": total_alerts,
+            "critical_alerts": sum(1 for f in all_findings if f.get('severity') == 'critical'),
+            "warning_alerts": sum(1 for f in all_findings if f.get('severity') == 'warning'),
+            "fields_with_drift": drift_detected_count,
+            "total_fields_compared": len(set(all_fields_scanned))
+        },
+        "overrides": user_overrides if user_overrides else {}
+    }
+    
+    # Generate Excel export
+    excel_blob = _generate_excel_export(results, baseline_filename, current_filename, audit_trail, config)
 
     return {
         "source_file": {"baseline": baseline_filename, "current": current_filename},
         "agent": "DriftDetector",
-        "audit": {
-            "profile_date": datetime.now(timezone.utc).isoformat(),
-            "agent_version": AGENT_VERSION,
-            "compute_time_seconds": round(compute_time, 2)
-        },
-        "results": results
+        "audit": audit_trail,
+        "results": results,
+        "excel_export": excel_blob
     }
+
+
+def _extract_findings_from_result(sheet_result: dict) -> list:
+    """Extract structured findings from sheet result for audit trail."""
+    findings = []
+    
+    for alert in sheet_result.get('alerts', []):
+        finding = {
+            "severity": alert.get("level", "info"),
+            "issue": alert.get("message", ""),
+            "category": "drift_detection"
+        }
+        findings.append(finding)
+    
+    return findings
+
+
+def _generate_excel_export(results: dict, baseline_filename: str, current_filename: str, audit_trail: dict, config: dict) -> dict:
+    """Generate Excel export blob with drift detection results."""
+    from io import BytesIO
+    
+    try:
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            
+            # Sheet 1: Summary
+            summary_data = {
+                "Metric": [
+                    "Baseline File",
+                    "Current File",
+                    "Agent",
+                    "Version",
+                    "Timestamp",
+                    "Compute Time (seconds)",
+                    "Total Datasets Analyzed",
+                    "Total Alerts Generated",
+                    "Critical Alerts",
+                    "Warning Alerts",
+                    "Fields with Drift",
+                    "Total Fields Compared"
+                ],
+                "Value": [
+                    baseline_filename,
+                    current_filename,
+                    audit_trail["agent_name"],
+                    audit_trail["agent_version"],
+                    audit_trail["timestamp"],
+                    audit_trail["compute_time_seconds"],
+                    audit_trail["scores"]["total_datasets_analyzed"],
+                    audit_trail["scores"]["total_alerts_generated"],
+                    audit_trail["scores"]["critical_alerts"],
+                    audit_trail["scores"]["warning_alerts"],
+                    audit_trail["scores"]["fields_with_drift"],
+                    audit_trail["scores"]["total_fields_compared"]
+                ]
+            }
+            pd.DataFrame(summary_data).to_excel(writer, sheet_name="Summary", index=False)
+            
+            # Sheet 2: Fields Scanned
+            if audit_trail["fields_scanned"]:
+                pd.DataFrame({"Field Name": audit_trail["fields_scanned"]}).to_excel(writer, sheet_name="Fields Scanned", index=False)
+            
+            # Sheet 3: Findings
+            if audit_trail["findings"]:
+                pd.DataFrame(audit_trail["findings"]).to_excel(writer, sheet_name="Findings", index=False)
+            
+            # Sheet 4: Actions
+            pd.DataFrame({"Action": audit_trail["actions"]}).to_excel(writer, sheet_name="Actions", index=False)
+            
+            # Sheet 5: Configuration
+            pd.DataFrame({"Parameter": list(config.keys()), "Value": list(config.values())}).to_excel(writer, sheet_name="Configuration", index=False)
+            
+            # Sheet 6+: Detailed drift results per dataset
+            for dataset_name, dataset_result in results.items():
+                if dataset_result.get("status") == "success" and "data" in dataset_result:
+                    data = dataset_result["data"]
+                    
+                    if "columns" in data:
+                        drift_data = []
+                        for col, drift_info in data["columns"].items():
+                            row = {
+                                "Column": col,
+                                "Type": drift_info.get("type", "N/A"),
+                                "Drift Detected": drift_info.get("drift_detected", False)
+                            }
+                            
+                            if drift_info.get("type") == "Numeric":
+                                row.update({
+                                    "KS Statistic": drift_info.get("ks_statistic"),
+                                    "P-Value": drift_info.get("p_value")
+                                })
+                            elif drift_info.get("type") == "Categorical":
+                                row.update({
+                                    "PSI": drift_info.get("psi"),
+                                    "JS Divergence": drift_info.get("js_divergence"),
+                                    "New Categories": ", ".join(drift_info.get("new_categories", [])) if drift_info.get("new_categories") else "",
+                                    "Missing Categories": ", ".join(drift_info.get("missing_categories", [])) if drift_info.get("missing_categories") else ""
+                                })
+                            
+                            drift_data.append(row)
+                        
+                        if drift_data:
+                            safe_name = dataset_name[:25]
+                            pd.DataFrame(drift_data).to_excel(writer, sheet_name=f"{safe_name}_Drift", index=False)
+            
+            # Sheet: Overrides (if any)
+            if audit_trail["overrides"]:
+                pd.DataFrame({"Parameter": list(audit_trail["overrides"].keys()), "User Value": list(audit_trail["overrides"].values())}).to_excel(writer, sheet_name="User Overrides", index=False)
+        
+        output.seek(0)
+        excel_bytes = output.read()
+        excel_base64 = base64.b64encode(excel_bytes).decode('utf-8')
+        
+        sheets_list = [
+            "Summary",
+            "Fields Scanned" if audit_trail["fields_scanned"] else None,
+            "Findings" if audit_trail["findings"] else None,
+            "Actions",
+            "Configuration",
+            "User Overrides" if audit_trail["overrides"] else None
+        ]
+        sheets_list = [s for s in sheets_list if s]
+        sheets_list.extend([f"{dataset[:25]}_Drift" for dataset in results.keys()])
+        
+        return {
+            "filename": f"{baseline_filename.rsplit('.', 1)[0]}_vs_{current_filename.rsplit('.', 1)[0]}_drift_report.xlsx",
+            "size_bytes": len(excel_bytes),
+            "format": "xlsx",
+            "base64_data": excel_base64,
+            "sheets_included": sheets_list,
+            "download_ready": True
+        }
+    except Exception as e:
+        return {
+            "filename": None,
+            "size_bytes": 0,
+            "format": "xlsx",
+            "base64_data": None,
+            "error": f"Failed to generate Excel export: {str(e)}",
+            "download_ready": False
+        }
 

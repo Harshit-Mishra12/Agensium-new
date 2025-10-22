@@ -1,0 +1,204 @@
+{
+  "source_file": "customer_data.csv",
+  "agent": "UnifiedProfiler",
+  
+  "audit": {
+    "agent_name": "UnifiedProfiler",
+    "timestamp": "2025-10-22T09:37:15.123456+00:00",
+    "profile_date": "2025-10-22T09:37:15.123456+00:00",
+    "agent_version": "1.0.0",
+    "compute_time_seconds": 1.23,
+    
+    "fields_scanned": [
+      "customer_id",
+      "age",
+      "income",
+      "city",
+      "signup_date"
+    ],
+    
+    "findings": [
+      {
+        "severity": "warning",
+        "field": "age",
+        "issue": "High null percentage: 25.5% of values are missing.",
+        "category": "data_completeness",
+        "data_type": "int64",
+        "semantic_type": "Numeric",
+        "null_percentage": 25.5
+      },
+      {
+        "severity": "warning",
+        "field": "income",
+        "issue": "High outlier count: 45 outliers detected (4.5% of non-null values).",
+        "category": "data_quality",
+        "data_type": "float64",
+        "semantic_type": "Numeric",
+        "null_percentage": 2.1,
+        "outlier_count": 45,
+        "outlier_sample": [250000.0, 300000.0, 350000.0, 400000.0, 500000.0]
+      },
+      {
+        "severity": "info",
+        "field": "city",
+        "issue": "Column has only one unique value: 'New York'. Consider removing this constant column.",
+        "category": "data_variance",
+        "data_type": "object",
+        "semantic_type": "Categorical",
+        "null_percentage": 0.0
+      }
+    ],
+    
+    "actions": [
+      "Profiled 5 columns across 1 sheet(s)",
+      "Generated 3 alert(s)",
+      "Performed semantic type inference on all fields",
+      "Calculated statistical measures for numeric fields",
+      "Detected outliers using IQR method",
+      "Computed entropy for categorical/text fields"
+    ],
+    
+    "scores": {
+      "total_columns_profiled": 5,
+      "total_sheets_analyzed": 1,
+      "total_alerts_generated": 3,
+      "critical_alerts": 0,
+      "warning_alerts": 2,
+      "info_alerts": 1
+    },
+    
+    "overrides": {
+      "null_alert_threshold": 15.0,
+      "categorical_threshold": 30
+    }
+  },
+  
+  "results": {
+    "customer_data": {
+      "status": "success",
+      "metadata": {
+        "total_rows": 1000
+      },
+      "alerts": [
+        {
+          "level": "warning",
+          "field": "age",
+          "message": "High null percentage: 25.5% of values are missing."
+        },
+        {
+          "level": "warning",
+          "field": "income",
+          "message": "High outlier count: 45 outliers detected (4.5% of non-null values)."
+        },
+        {
+          "level": "info",
+          "field": "city",
+          "message": "Column has only one unique value: 'New York'. Consider removing this constant column."
+        }
+      ],
+      "routing": {
+        "status": "Needs Review",
+        "reason": "Data quality issues detected (high nulls, outliers, or empty dataset).",
+        "suggestion": "Review the alerts and consider using the data cleaning tool to address issues.",
+        "suggested_agent_endpoint": "/run-tool/cleaner"
+      },
+      "data": {
+        "columns": {
+          "customer_id": {
+            "field_name": "customer_id",
+            "data_type": "int64",
+            "null_count": 0,
+            "null_percentage": 0.0,
+            "semantic_type": "Numeric",
+            "min": 1.0,
+            "max": 1000.0,
+            "mean": 500.5,
+            "median": 500.5,
+            "std_dev": 288.82,
+            "variance": 83416.67,
+            "p25": 250.75,
+            "p75": 750.25,
+            "outlier_count": 0,
+            "outlier_sample": []
+          },
+          "age": {
+            "field_name": "age",
+            "data_type": "int64",
+            "null_count": 255,
+            "null_percentage": 25.5,
+            "semantic_type": "Numeric",
+            "min": 18.0,
+            "max": 95.0,
+            "mean": 42.5,
+            "median": 41.0,
+            "std_dev": 15.2,
+            "variance": 231.04,
+            "p25": 30.0,
+            "p75": 55.0,
+            "outlier_count": 12,
+            "outlier_sample": [120.0, 150.0, 10.0, 5.0, 200.0]
+          },
+          "income": {
+            "field_name": "income",
+            "data_type": "float64",
+            "null_count": 21,
+            "null_percentage": 2.1,
+            "semantic_type": "Numeric",
+            "min": 20000.0,
+            "max": 500000.0,
+            "mean": 65000.0,
+            "median": 60000.0,
+            "std_dev": 45000.0,
+            "variance": 2025000000.0,
+            "p25": 45000.0,
+            "p75": 85000.0,
+            "outlier_count": 45,
+            "outlier_sample": [250000.0, 300000.0, 350000.0, 400000.0, 500000.0]
+          },
+          "city": {
+            "field_name": "city",
+            "data_type": "object",
+            "null_count": 0,
+            "null_percentage": 0.0,
+            "semantic_type": "Categorical",
+            "unique_values_count": 1,
+            "top_values": [
+              {
+                "value": "New York",
+                "count": 1000
+              }
+            ],
+            "entropy": 0.0
+          },
+          "signup_date": {
+            "field_name": "signup_date",
+            "data_type": "object",
+            "null_count": 5,
+            "null_percentage": 0.5,
+            "semantic_type": "Temporal",
+            "earliest_date": "2020-01-01T00:00:00",
+            "latest_date": "2025-10-22T00:00:00",
+            "time_span_days": 2121
+          }
+        }
+      }
+    }
+  },
+  
+  "excel_export": {
+    "filename": "customer_data_profile_report.xlsx",
+    "size_bytes": 45678,
+    "format": "xlsx",
+    "base64_data": "UEsDBBQAAAAIAH1pYlkAAAAAAAAAAAAAABQAHABkb2NQcm9wcy9hcHAueG1sIKIYACigFAAAAAAA...",
+    "sheets_included": [
+      "Summary",
+      "Fields Scanned",
+      "Findings",
+      "Actions",
+      "Configuration",
+      "User Overrides",
+      "Profile_customer_data"
+    ],
+    "download_ready": true
+  }
+}

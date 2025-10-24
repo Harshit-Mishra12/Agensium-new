@@ -21,6 +21,7 @@ def answer_question_on_report(agent_report: dict, user_question: str, history: l
     Uses an OpenAI LLM to answer a user's question, considering the chat history for context.
     """
     start_time = time.time()
+    history = None
     
     try:
         # --- Prompt Engineering with History ---
@@ -50,7 +51,6 @@ def answer_question_on_report(agent_report: dict, user_question: str, history: l
         # --- Construct the messages list for the API call ---
         messages = [{"role": "system", "content": system_prompt}]
         
-        # Add the previous conversation history if it exists
         if history:
             messages.extend(history)
             

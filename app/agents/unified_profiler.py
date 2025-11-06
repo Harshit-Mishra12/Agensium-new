@@ -14,6 +14,7 @@ from scipy.stats import entropy as scipy_entropy
 from fastapi import HTTPException
 
 from app.config import AGENT_ROUTES
+from app.agents.shared.chat_agent import generate_llm_summary
 
 AGENT_VERSION = "1.0.0"
 
@@ -64,11 +65,6 @@ def profile_dataset(file_contents: bytes, filename: str, config: dict, user_over
             results[sheet_name] = {
                 "status": "error",
                 "metadata": {"total_rows": 0},
-                "alerts": [{
-                    "level": "critical",
-                    "field": None,
-                    "message": "Dataset is empty. No rows to profile."
-                }],
                 "routing": {
                     "status": "Needs Review",
                     "reason": "Empty dataset detected",
@@ -82,14 +78,20 @@ def profile_dataset(file_contents: bytes, filename: str, config: dict, user_over
         # Initialize containers
         columns_profile = {}
         alerts = []
+        row_level_issues = []
         fields_scanned = list(df.columns)
         all_fields_scanned.extend(fields_scanned)
         
-        # Profile each column
+        # Profile each column with row-level issue tracking
         for col_name in df.columns:
-            column_profile = _profile_column(df[col_name], col_name, total_rows, config, alerts)
+            column_profile, col_issues = _profile_column_with_issues(df, col_name, total_rows, config, alerts)
             columns_profile[col_name] = column_profile
+            row_level_issues.extend(col_issues)
             total_columns_profiled += 1
+        
+        # Detect duplicate rows
+        duplicate_issues = _detect_duplicate_rows(df)
+        row_level_issues.extend(duplicate_issues)
         
         # Determine routing based on alerts
         routing = _determine_routing(alerts)
@@ -102,13 +104,15 @@ def profile_dataset(file_contents: bytes, filename: str, config: dict, user_over
         results[sheet_name] = {
             "status": "success",
             "metadata": {
-                "total_rows": total_rows
+                "total_rows": total_rows,
+                "total_issues": len(row_level_issues)
             },
-            "alerts": alerts,
             "routing": routing,
             "data": {
-                "columns": columns_profile
-            }
+                "columns": columns_profile,
+                "row_level_issues": row_level_issues[:100]  # Limit to first 100 issues for performance
+            },
+            "issue_summary": _summarize_issues(row_level_issues)
         }
     
     # Calculate compute time
@@ -145,12 +149,16 @@ def profile_dataset(file_contents: bytes, filename: str, config: dict, user_over
     # Generate Excel export blob
     excel_blob = _generate_excel_export(results, filename, audit_trail, config)
     
+    # Generate LLM summary
+    llm_summary = generate_llm_summary("UnifiedProfiler", results, audit_trail)
+    
     # Build final response
     response = {
         "source_file": filename,
         "agent": "UnifiedProfiler",
         "audit": audit_trail,
         "results": results,
+        "summary": llm_summary,
         "excel_export": excel_blob
     }
     
@@ -645,11 +653,160 @@ def _generate_excel_export(results: dict, filename: str, audit_trail: dict, conf
         }
         
     except Exception as e:
+        # If Excel generation fails, return error info
         return {
-            "filename": None,
-            "size_bytes": 0,
-            "format": "xlsx",
-            "base64_data": None,
+            "filename": f"{filename.rsplit('.', 1)[0]}_profile_report.xlsx",
             "error": f"Failed to generate Excel export: {str(e)}",
             "download_ready": False
         }
+
+
+def _profile_column_with_issues(df: pd.DataFrame, col_name: str, total_rows: int, config: dict, alerts: list) -> tuple:
+    """
+    Profile a column and track row-level issues.
+    
+    Args:
+        df: Full DataFrame
+        col_name: Column name to profile
+        total_rows: Total number of rows
+        config: Configuration dictionary
+        alerts: List to append alerts to
+        
+    Returns:
+        tuple: (column_profile dict, list of row-level issues)
+    """
+    series = df[col_name]
+    issues = []
+    
+    # Track null value rows
+    null_mask = series.isna()
+    null_indices = df.index[null_mask].tolist()
+    if len(null_indices) > 0:
+        # Limit to first 20 null rows for performance
+        for idx in null_indices[:20]:
+            issues.append({
+                "row_index": int(idx),
+                "column": col_name,
+                "issue_type": "null_value",
+                "severity": "warning" if len(null_indices) / total_rows > 0.2 else "info",
+                "value": None,
+                "message": f"Null value in column '{col_name}'"
+            })
+    
+    # Get the regular column profile
+    profile = _profile_column(series, col_name, total_rows, config, alerts)
+    
+    # Track outliers with row indices (for numeric columns)
+    if profile.get("semantic_type") == "Numeric" and profile.get("outlier_count", 0) > 0:
+        non_null_series = series.dropna()
+        if len(non_null_series) > 0:
+            q1 = profile.get("p25")
+            q3 = profile.get("p75")
+            iqr = q3 - q1
+            multiplier = config.get("outlier_iqr_multiplier", 1.5)
+            lower_bound = q1 - (multiplier * iqr)
+            upper_bound = q3 + (multiplier * iqr)
+            
+            outlier_mask = (series < lower_bound) | (series > upper_bound)
+            outlier_indices = df.index[outlier_mask].tolist()
+            
+            # Limit to first 20 outliers
+            for idx in outlier_indices[:20]:
+                value = series.iloc[idx] if idx < len(series) else None
+                issues.append({
+                    "row_index": int(idx),
+                    "column": col_name,
+                    "issue_type": "outlier",
+                    "severity": "warning",
+                    "value": float(value) if pd.notna(value) else None,
+                    "message": f"Outlier detected in column '{col_name}': {value}",
+                    "bounds": {"lower": lower_bound, "upper": upper_bound}
+                })
+    
+    # Track single-value columns
+    if profile.get("semantic_type") in ["Categorical", "Free Text"]:
+        if profile.get("unique_values_count") == 1 and total_rows > 1:
+            issues.append({
+                "row_index": None,  # Affects all rows
+                "column": col_name,
+                "issue_type": "constant_column",
+                "severity": "info",
+                "value": str(series.dropna().iloc[0]) if len(series.dropna()) > 0 else None,
+                "message": f"Column '{col_name}' has only one unique value"
+            })
+    
+    return profile, issues
+
+
+def _detect_duplicate_rows(df: pd.DataFrame) -> list:
+    """
+    Detect duplicate rows and return their indices.
+    
+    Args:
+        df: DataFrame to check for duplicates
+        
+    Returns:
+        list: Row-level issues for duplicate rows
+    """
+    issues = []
+    
+    # Find duplicate rows
+    duplicate_mask = df.duplicated(keep=False)
+    duplicate_indices = df.index[duplicate_mask].tolist()
+    
+    if len(duplicate_indices) > 0:
+        # Group duplicates together
+        duplicate_groups = {}
+        for idx in duplicate_indices:
+            row_tuple = tuple(df.iloc[idx].values)
+            if row_tuple not in duplicate_groups:
+                duplicate_groups[row_tuple] = []
+            duplicate_groups[row_tuple].append(int(idx))
+        
+        # Create issues for duplicate groups (limit to first 10 groups)
+        for group_idx, (row_values, indices) in enumerate(list(duplicate_groups.items())[:10]):
+            issues.append({
+                "row_index": indices,  # List of all duplicate row indices
+                "column": None,  # Affects entire row
+                "issue_type": "duplicate_row",
+                "severity": "warning",
+                "value": None,
+                "message": f"Duplicate row found at indices {indices[:5]}{'...' if len(indices) > 5 else ''}",
+                "duplicate_count": len(indices)
+            })
+    
+    return issues
+
+
+def _summarize_issues(issues: list) -> dict:
+    """
+    Summarize row-level issues by type and severity.
+    
+    Args:
+        issues: List of row-level issues
+        
+    Returns:
+        dict: Summary statistics of issues
+    """
+    summary = {
+        "total_issues": len(issues),
+        "by_type": {},
+        "by_severity": {},
+        "by_column": {}
+    }
+    
+    for issue in issues:
+        # Count by type
+        issue_type = issue.get("issue_type", "unknown")
+        summary["by_type"][issue_type] = summary["by_type"].get(issue_type, 0) + 1
+        
+        # Count by severity
+        severity = issue.get("severity", "info")
+        summary["by_severity"][severity] = summary["by_severity"].get(severity, 0) + 1
+        
+        # Count by column
+        column = issue.get("column")
+        if column:
+            summary["by_column"][column] = summary["by_column"].get(column, 0) + 1
+    
+    return summary

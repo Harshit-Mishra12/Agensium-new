@@ -9,6 +9,7 @@ from fastapi import HTTPException
 import warnings
 
 from app.config import AGENT_ROUTES
+from app.agents.shared.chat_agent import generate_llm_summary
 
 AGENT_VERSION = "1.0.0"
 
@@ -130,11 +131,15 @@ def score_risk(file_contents: bytes, filename: str, config: dict = None, user_ov
     
     excel_blob = _generate_excel_export(results, filename, audit_trail, config)
     
+    # Generate LLM summary
+    llm_summary = generate_llm_summary("RiskScorer", results, audit_trail)
+    
     return {
         "source_file": filename,
         "agent": "RiskScorer",
         "audit": audit_trail,
         "results": results,
+        "summary": llm_summary,
         "excel_export": excel_blob
     }
 
@@ -158,10 +163,12 @@ def _assess_sheet_risk(df: pd.DataFrame, sheet_name: str, config: dict) -> dict:
     pii_fields = []
     sensitive_fields = []
     governance_gaps = []
+    row_level_issues = []
     
     for col_name in df.columns:
-        risk_assessment = _assess_field_risk(df[col_name], col_name, config)
+        risk_assessment, col_issues = _assess_field_risk_with_rows(df, col_name, config)
         field_risks[col_name] = risk_assessment
+        row_level_issues.extend(col_issues)
         
         if risk_assessment['pii_detected']:
             pii_fields.append(col_name)
@@ -188,17 +195,19 @@ def _assess_sheet_risk(df: pd.DataFrame, sheet_name: str, config: dict) -> dict:
             "total_fields": len(df.columns),
             "pii_fields_count": len(pii_fields),
             "sensitive_fields_count": len(sensitive_fields),
-            "governance_gaps_count": len(governance_gaps)
+            "governance_gaps_count": len(governance_gaps),
+            "total_issues": len(row_level_issues)
         },
-        "alerts": alerts,
         "routing": routing,
         "data": {
             "field_risks": field_risks,
             "overall_risk_score": overall_risk_score,
             "pii_fields": pii_fields,
             "sensitive_fields": sensitive_fields,
-            "governance_gaps": governance_gaps
-        }
+            "governance_gaps": governance_gaps,
+            "row_level_issues": row_level_issues[:100]  # Limit to first 100
+        },
+        "issue_summary": _summarize_risk_issues(row_level_issues)
     }
 
 
@@ -442,3 +451,111 @@ def _generate_excel_export(results: dict, filename: str, audit_trail: dict, conf
             "error": f"Failed to generate Excel export: {str(e)}",
             "download_ready": False
         }
+
+
+def _assess_field_risk_with_rows(df: pd.DataFrame, col_name: str, config: dict) -> tuple:
+    """
+    Assess field risk and track row-level PII/sensitive data occurrences.
+    
+    Args:
+        df: Full DataFrame
+        col_name: Column name to assess
+        config: Configuration dictionary
+    
+    Returns:
+        tuple: (risk_assessment dict, list of row-level issues)
+    """
+    series = df[col_name]
+    issues = []
+    
+    # Get the regular risk assessment
+    risk_assessment = _assess_field_risk(series, col_name, config)
+    
+    # Track PII occurrences with row indices
+    if risk_assessment['pii_detected'] and config.get('pii_detection_enabled', True):
+        sample_size = min(config.get('pii_sample_size', 100), len(series))
+        sample_data = series.dropna().astype(str).head(sample_size)
+        
+        for pii_type, pattern in PII_PATTERNS.items():
+            matches = sample_data.str.contains(pattern, regex=True, na=False)
+            if matches.any():
+                matching_indices = sample_data.index[matches].tolist()
+                
+                # Limit to first 10 matches per PII type
+                for idx in matching_indices[:10]:
+                    value = str(series.iloc[idx]) if idx < len(series) else None
+                    # Mask PII value for security
+                    masked_value = value[:3] + "***" if value and len(value) > 3 else "***"
+                    
+                    issues.append({
+                        "row_index": int(idx),
+                        "column": col_name,
+                        "issue_type": "pii_detected",
+                        "pii_type": pii_type,
+                        "severity": "critical",
+                        "value": masked_value,  # Masked for security
+                        "message": f"PII detected ({pii_type}) in column '{col_name}'"
+                    })
+    
+    # Track sensitive field occurrences
+    if risk_assessment['is_sensitive']:
+        # For sensitive fields, just note the column (not specific rows)
+        issues.append({
+            "row_index": None,  # Affects all rows
+            "column": col_name,
+            "issue_type": "sensitive_field",
+            "severity": "high",
+            "value": None,
+            "message": f"Column '{col_name}' contains sensitive data"
+        })
+    
+    # Track governance gaps
+    if risk_assessment['governance_issues']:
+        for gap in risk_assessment['governance_issues']:
+            issues.append({
+                "row_index": None,  # Affects all rows
+                "column": col_name,
+                "issue_type": "governance_gap",
+                "severity": "warning",
+                "value": None,
+                "message": gap
+            })
+    
+    return risk_assessment, issues
+
+
+def _summarize_risk_issues(issues: list) -> dict:
+    """
+    Summarize risk issues by type and severity.
+    
+    Args:
+        issues: List of row-level risk issues
+    
+    Returns:
+        dict: Summary statistics
+    """
+    summary = {
+        "total_issues": len(issues),
+        "by_type": {},
+        "by_severity": {},
+        "by_column": {},
+        "by_pii_type": {}
+    }
+    
+    for issue in issues:
+        issue_type = issue.get("issue_type", "unknown")
+        summary["by_type"][issue_type] = summary["by_type"].get(issue_type, 0) + 1
+        
+        severity = issue.get("severity", "info")
+        summary["by_severity"][severity] = summary["by_severity"].get(severity, 0) + 1
+        
+        column = issue.get("column")
+        if column:
+            summary["by_column"][column] = summary["by_column"].get(column, 0) + 1
+        
+        # Track PII types
+        pii_type = issue.get("pii_type")
+        if pii_type:
+            summary["by_pii_type"][pii_type] = summary["by_pii_type"].get(pii_type, 0) + 1
+    
+    return summary

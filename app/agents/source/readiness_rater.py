@@ -9,6 +9,7 @@ import warnings
 
 # Import the central route registry
 from app.config import AGENT_ROUTES
+from app.agents.shared.chat_agent import generate_llm_summary
 
 # Define the current version of the agent
 AGENT_VERSION = "1.2.0"
@@ -20,9 +21,10 @@ def _calculate_readiness_score(df: pd.DataFrame, config: dict):
     if df.empty:
         scores = {"overall": 0, "completeness": 0, "consistency": 0, "schema_health": 0}
         deductions = ["Dataset is empty, resulting in a score of 0."]
-        return scores, deductions
+        return scores, deductions, []
 
     deductions = []
+    row_level_issues = []
     
     # 1. Completeness Score (based on nulls)
     total_cells = df.size
@@ -31,6 +33,9 @@ def _calculate_readiness_score(df: pd.DataFrame, config: dict):
     completeness_score = 100 - null_percentage
     if null_cells > 0:
         deductions.append(f"Completeness: Score reduced by {null_percentage:.1f} points due to {null_percentage:.1f}% null values.")
+        # Track null value rows
+        null_issues = _detect_null_rows(df)
+        row_level_issues.extend(null_issues)
 
     # 2. Consistency Score (based on duplicate rows)
     duplicate_rows = df.duplicated().sum()
@@ -39,6 +44,9 @@ def _calculate_readiness_score(df: pd.DataFrame, config: dict):
     consistency_score = 100 - duplicate_percentage
     if duplicate_rows > 0:
         deductions.append(f"Consistency: Score reduced by {duplicate_percentage:.1f} points due to {duplicate_rows} duplicate rows ({duplicate_percentage:.1f}%).")
+        # Track duplicate rows
+        dup_issues = _detect_duplicate_rows_readiness(df)
+        row_level_issues.extend(dup_issues)
 
     # 3. Schema Health Score (heuristic-based)
     schema_health_score = 100
@@ -47,6 +55,15 @@ def _calculate_readiness_score(df: pd.DataFrame, config: dict):
         if df[col].nunique() == 1 and len(df) > 1:
             schema_health_score -= 10
             deductions.append(f"Schema Health: Score reduced by 10 points because column '{col}' has only one unique value.")
+            # Track constant columns
+            row_level_issues.append({
+                "row_index": None,
+                "column": col,
+                "issue_type": "constant_column",
+                "severity": "info",
+                "value": str(df[col].dropna().iloc[0]) if len(df[col].dropna()) > 0 else None,
+                "message": f"Column '{col}' has only one unique value"
+            })
     
     # Penalize for potential mixed-type object columns
     with warnings.catch_warnings():
@@ -74,13 +91,13 @@ def _calculate_readiness_score(df: pd.DataFrame, config: dict):
         "schema_health": round(schema_health_score)
     }
     
-    return scores, deductions
+    return scores, deductions, row_level_issues
 
 def _profile_dataframe(df: pd.DataFrame, config: dict):
     """
     Generates the full agentic response for a single DataFrame.
     """
-    scores, deductions = _calculate_readiness_score(df, config)
+    scores, deductions, row_level_issues = _calculate_readiness_score(df, config)
     overall_score = scores['overall']
     alerts = []
     
@@ -115,13 +132,18 @@ def _profile_dataframe(df: pd.DataFrame, config: dict):
     
     return {
         "status": "success",
-        "metadata": {"total_rows_analyzed": len(df)},
+        "metadata": {
+            "total_rows_analyzed": len(df),
+            "total_issues": len(row_level_issues)
+        },
         "routing": routing,
         "alerts": alerts,
         "data": {
             "readiness_score": scores,
-            "deductions": deductions
-        }
+            "deductions": deductions,
+            "row_level_issues": row_level_issues[:100]  # Limit to first 100
+        },
+        "issue_summary": _summarize_readiness_issues(row_level_issues)
     }
 
 def rate_readiness(file_contents: bytes, filename: str, config: dict = None, user_overrides: dict = None):
@@ -232,12 +254,16 @@ def rate_readiness(file_contents: bytes, filename: str, config: dict = None, use
     
     # Generate Excel export blob
     excel_blob = _generate_excel_export(results, filename, audit_trail, config)
+    
+    # Generate LLM summary
+    llm_summary = generate_llm_summary("ReadinessRater", results, audit_trail)
 
     return {
         "source_file": filename,
         "agent": "ReadinessRater",
         "audit": audit_trail,
         "results": results,
+        "summary": llm_summary,
         "excel_export": excel_blob
     }
 
@@ -502,3 +528,102 @@ def _generate_excel_export(results: dict, filename: str, audit_trail: dict, conf
             "download_ready": False
         }
 
+
+def _detect_null_rows(df: pd.DataFrame) -> list:
+    """
+    Detect rows with null values.
+    
+    Args:
+        df: DataFrame to check
+    
+    Returns:
+        list: Row-level issues for null values
+    """
+    issues = []
+    
+    for col in df.columns:
+        null_mask = df[col].isna()
+        null_indices = df.index[null_mask].tolist()
+        
+        # Limit to first 20 null rows per column
+        for idx in null_indices[:20]:
+            issues.append({
+                "row_index": int(idx),
+                "column": col,
+                "issue_type": "null_value",
+                "severity": "warning" if len(null_indices) / len(df) > 0.2 else "info",
+                "value": None,
+                "message": f"Null value in column '{col}'"
+            })
+    
+    return issues
+
+
+def _detect_duplicate_rows_readiness(df: pd.DataFrame) -> list:
+    """
+    Detect duplicate rows.
+    
+    Args:
+        df: DataFrame to check
+    
+    Returns:
+        list: Row-level issues for duplicate rows
+    """
+    issues = []
+    
+    duplicate_mask = df.duplicated(keep=False)
+    duplicate_indices = df.index[duplicate_mask].tolist()
+    
+    if len(duplicate_indices) > 0:
+        # Group duplicates
+        duplicate_groups = {}
+        for idx in duplicate_indices:
+            row_tuple = tuple(df.iloc[idx].values)
+            if row_tuple not in duplicate_groups:
+                duplicate_groups[row_tuple] = []
+            duplicate_groups[row_tuple].append(int(idx))
+        
+        # Create issues for duplicate groups (limit to first 10)
+        for group_idx, (row_values, indices) in enumerate(list(duplicate_groups.items())[:10]):
+            issues.append({
+                "row_index": indices,
+                "column": None,
+                "issue_type": "duplicate_row",
+                "severity": "warning",
+                "value": None,
+                "message": f"Duplicate row found at indices {indices[:5]}{'...' if len(indices) > 5 else ''}",
+                "duplicate_count": len(indices)
+            })
+    
+    return issues
+
+
+def _summarize_readiness_issues(issues: list) -> dict:
+    """
+    Summarize readiness issues by type and severity.
+    
+    Args:
+        issues: List of row-level issues
+    
+    Returns:
+        dict: Summary statistics
+    """
+    summary = {
+        "total_issues": len(issues),
+        "by_type": {},
+        "by_severity": {},
+        "by_column": {}
+    }
+    
+    for issue in issues:
+        issue_type = issue.get("issue_type", "unknown")
+        summary["by_type"][issue_type] = summary["by_type"].get(issue_type, 0) + 1
+        
+        severity = issue.get("severity", "info")
+        summary["by_severity"][severity] = summary["by_severity"].get(severity, 0) + 1
+        
+        column = issue.get("column")
+        if column:
+            summary["by_column"][column] = summary["by_column"].get(column, 0) + 1
+    
+    return summary

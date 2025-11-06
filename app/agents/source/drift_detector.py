@@ -11,6 +11,7 @@ from scipy.spatial.distance import jensenshannon
 
 # Import the central route registry
 from app.config import AGENT_ROUTES
+from app.agents.shared.chat_agent import generate_llm_summary
 
 AGENT_VERSION = "1.4.0" # Enhanced with audit trail and Excel export
 
@@ -122,6 +123,7 @@ def _compare_dataframes(baseline_df: pd.DataFrame, current_df: pd.DataFrame):
     
     alerts = []
     drift_details = {}
+    row_level_issues = []
     
     if new_cols:
         alerts.append({"level": "critical", "message": f"Schema changed: {len(new_cols)} new column(s) detected: {', '.join(new_cols)}."})
@@ -144,6 +146,9 @@ def _compare_dataframes(baseline_df: pd.DataFrame, current_df: pd.DataFrame):
             if p_value < P_VALUE_THRESHOLD:
                 drift_detected = True
                 alerts.append({"level": "critical", "message": f"Significant distribution drift in numeric column '{col}' (p-value: {p_value:.2f})."})
+                # Track row-level drift for numeric columns
+                drift_issues = _detect_numeric_drift_rows(baseline_df, current_df, col, baseline_series, current_series)
+                row_level_issues.extend(drift_issues)
             else:
                 drift_detected = False
             col_drift["drift_detected"] = drift_detected
@@ -171,9 +176,15 @@ def _compare_dataframes(baseline_df: pd.DataFrame, current_df: pd.DataFrame):
             if psi > PSI_CRITICAL_THRESHOLD:
                 drift_detected = True
                 alerts.append({"level": "critical", "message": f"Critical distribution drift in categorical column '{col}' (PSI: {psi:.2f})."})
+                # Track row-level drift for categorical columns
+                drift_issues = _detect_categorical_drift_rows(current_df, col, new_categories, missing_categories)
+                row_level_issues.extend(drift_issues)
             elif psi > PSI_ALERT_THRESHOLD:
                 drift_detected = True
                 alerts.append({"level": "warning", "message": f"Moderate distribution drift in categorical column '{col}' (PSI: {psi:.2f})."})
+                # Track row-level drift for categorical columns
+                drift_issues = _detect_categorical_drift_rows(current_df, col, new_categories, missing_categories)
+                row_level_issues.extend(drift_issues)
             
             col_drift["drift_detected"] = drift_detected
         
@@ -194,8 +205,18 @@ def _compare_dataframes(baseline_df: pd.DataFrame, current_df: pd.DataFrame):
 
     return {
         "status": "success",
-        "metadata": {"baseline_rows": len(baseline_df), "current_rows": len(current_df)},
-        "alerts": alerts, "routing": routing, "data": {"columns": drift_details}
+        "metadata": {
+            "baseline_rows": len(baseline_df), 
+            "current_rows": len(current_df),
+            "total_issues": len(row_level_issues)
+        },
+        "alerts": alerts, 
+        "routing": routing, 
+        "data": {
+            "columns": drift_details,
+            "row_level_issues": row_level_issues[:100]  # Limit to first 100
+        },
+        "issue_summary": _summarize_drift_issues(row_level_issues)
     }
 
 # --- Main Agent Function ---
@@ -327,12 +348,16 @@ def detect_drift(baseline_contents: bytes, current_contents: bytes, baseline_fil
     
     # Generate Excel export
     excel_blob = _generate_excel_export(results, baseline_filename, current_filename, audit_trail, config)
+    
+    # Generate LLM summary
+    llm_summary = generate_llm_summary("DriftDetector", results, audit_trail)
 
     return {
         "source_file": {"baseline": baseline_filename, "current": current_filename},
         "agent": "DriftDetector",
         "audit": audit_trail,
         "results": results,
+        "summary": llm_summary,
         "excel_export": excel_blob
     }
 
@@ -469,11 +494,114 @@ def _generate_excel_export(results: dict, baseline_filename: str, current_filena
         }
     except Exception as e:
         return {
-            "filename": None,
-            "size_bytes": 0,
-            "format": "xlsx",
-            "base64_data": None,
+            "filename": f"drift_report_{baseline_filename.rsplit('.', 1)[0]}_vs_{current_filename.rsplit('.', 1)[0]}.xlsx",
             "error": f"Failed to generate Excel export: {str(e)}",
             "download_ready": False
         }
 
+
+def _detect_numeric_drift_rows(baseline_df: pd.DataFrame, current_df: pd.DataFrame, col: str, baseline_series: pd.Series, current_series: pd.Series) -> list:
+    """
+    Detect rows with significant numeric drift.
+    
+    Args:
+        baseline_df: Baseline DataFrame
+        current_df: Current DataFrame
+        col: Column name
+        baseline_series: Baseline series (non-null)
+        current_series: Current series (non-null)
+    
+    Returns:
+        list: Row-level drift issues
+    """
+    issues = []
+    
+    # Calculate baseline statistics
+    baseline_mean = baseline_series.mean()
+    baseline_std = baseline_series.std()
+    
+    # Find rows in current that are significantly different from baseline
+    current_full = current_df[col]
+    for idx in current_df.index[:20]:  # Limit to first 20
+        value = current_full.iloc[idx] if idx < len(current_full) else None
+        if pd.notna(value):
+            # Check if value is more than 2 std deviations from baseline mean
+            z_score = abs((value - baseline_mean) / baseline_std) if baseline_std > 0 else 0
+            if z_score > 2:
+                issues.append({
+                    "row_index": int(idx),
+                    "column": col,
+                    "issue_type": "numeric_drift",
+                    "severity": "warning",
+                    "value": float(value),
+                    "baseline_mean": round(float(baseline_mean), 2),
+                    "baseline_std": round(float(baseline_std), 2),
+                    "z_score": round(float(z_score), 2),
+                    "message": f"Value {value} in column '{col}' deviates significantly from baseline (z-score: {z_score:.2f})"
+                })
+    
+    return issues
+
+
+def _detect_categorical_drift_rows(current_df: pd.DataFrame, col: str, new_categories: list, missing_categories: list) -> list:
+    """
+    Detect rows with categorical drift (new or unexpected categories).
+    
+    Args:
+        current_df: Current DataFrame
+        col: Column name
+        new_categories: List of new categories not in baseline
+        missing_categories: List of categories missing from current
+    
+    Returns:
+        list: Row-level drift issues
+    """
+    issues = []
+    
+    # Track rows with new categories
+    if new_categories:
+        current_series = current_df[col].astype(str)
+        for new_cat in new_categories[:10]:  # Limit to first 10 new categories
+            matching_rows = current_df.index[current_series == new_cat].tolist()
+            for idx in matching_rows[:5]:  # First 5 rows per category
+                issues.append({
+                    "row_index": int(idx),
+                    "column": col,
+                    "issue_type": "new_category",
+                    "severity": "warning",
+                    "value": new_cat,
+                    "message": f"New category '{new_cat}' in column '{col}' not present in baseline"
+                })
+    
+    return issues
+
+
+def _summarize_drift_issues(issues: list) -> dict:
+    """
+    Summarize drift issues by type and severity.
+    
+    Args:
+        issues: List of row-level drift issues
+    
+    Returns:
+        dict: Summary statistics
+    """
+    summary = {
+        "total_issues": len(issues),
+        "by_type": {},
+        "by_severity": {},
+        "by_column": {}
+    }
+    
+    for issue in issues:
+        issue_type = issue.get("issue_type", "unknown")
+        summary["by_type"][issue_type] = summary["by_type"].get(issue_type, 0) + 1
+        
+        severity = issue.get("severity", "info")
+        summary["by_severity"][severity] = summary["by_severity"].get(severity, 0) + 1
+        
+        column = issue.get("column")
+        if column:
+            summary["by_column"][column] = summary["by_column"].get(column, 0) + 1
+    
+    return summary

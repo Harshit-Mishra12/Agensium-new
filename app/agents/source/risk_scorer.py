@@ -88,7 +88,7 @@ def score_risk(file_contents: bytes, filename: str, config: dict = None, user_ov
                 findings = _extract_findings_from_result(sheet_result, sheet_name)
                 all_findings.extend(findings)
         else:
-            raise HTTPException(status_code=400, detail=f"Unsupported file format: {file_extension}")
+            raise HTTPException(stsatus_code=400, detail=f"Unsupported file format: {file_extension}")
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process file '{filename}'. Error: {str(e)}")

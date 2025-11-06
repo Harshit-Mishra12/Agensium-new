@@ -77,3 +77,61 @@ def answer_question_on_report(agent_report: dict, user_question: str, history: l
         }
     }
 
+
+def generate_llm_summary(agent_name: str, results: dict, audit_trail: dict) -> str:
+    """
+    Generate an LLM-powered summary of agent results.
+    Shared helper function used by all data profiling agents.
+    
+    Args:
+        agent_name: Name of the agent (e.g., "UnifiedProfiler", "RiskScorer")
+        results: The results dictionary from the agent
+        audit_trail: The audit trail dictionary from the agent
+    
+    Returns:
+        str: A concise summary of findings and recommendations
+    """  
+    try:
+        # Prepare focused data for the LLM
+        summary_data = {
+            "agent": agent_name,
+            "scores": audit_trail.get("scores", {}),
+            "findings_count": len(audit_trail.get("findings", [])),
+            "critical_findings": [f for f in audit_trail.get("findings", []) if f.get("severity") == "critical"],
+            "warning_findings": [f for f in audit_trail.get("findings", []) if f.get("severity") == "warning"],
+            "high_findings": [f for f in audit_trail.get("findings", []) if f.get("severity") == "high"],
+            "actions": audit_trail.get("actions", [])
+        }
+        
+        system_prompt = f"""
+        You are an expert data analyst assistant. Analyze the {agent_name} results and provide a concise summary.
+        
+        Your summary should:
+        1. Highlight 2-3 most important findings
+        2. Provide clear, actionable recommendations
+        3. Be concise (3-5 sentences maximum)
+        4. Use professional language
+        5. Focus on what matters most
+        """
+        
+        user_prompt = f"""
+        Analysis data:
+        {json.dumps(summary_data, indent=2)}
+        
+        Provide a concise summary of what was found and what is recommended.
+        """
+        
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=300
+        )
+        
+        return response.choices[0].message.content.strip()
+        
+    except Exception as e:
+        return f"Summary generation failed: {str(e)}. Please review the detailed findings in the audit trail."

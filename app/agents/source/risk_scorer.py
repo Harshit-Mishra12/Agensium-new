@@ -97,6 +97,16 @@ def score_risk(file_contents: bytes, filename: str, config: dict = None, user_ov
     
     aggregate_scores = _calculate_aggregate_scores(results)
     
+    # Populate overrides with actual configuration values being used
+    effective_overrides = {
+        "pii_sample_size": config.get("pii_sample_size"),
+        "high_risk_threshold": config.get("high_risk_threshold"),
+        "medium_risk_threshold": config.get("medium_risk_threshold"),
+        "pii_detection_enabled": config.get("pii_detection_enabled"),
+        "sensitive_field_detection_enabled": config.get("sensitive_field_detection_enabled"),
+        "governance_check_enabled": config.get("governance_check_enabled")
+    }
+    
     audit_trail = {
         "agent_name": "RiskScorer",
         "timestamp": run_timestamp.isoformat(),
@@ -126,22 +136,27 @@ def score_risk(file_contents: bytes, filename: str, config: dict = None, user_ov
             "sensitive_fields_detected": aggregate_scores.get('sensitive_fields_count', 0),
             "governance_gaps": aggregate_scores.get('governance_gaps', 0)
         },
-        "overrides": user_overrides if user_overrides else {}
+        "overrides": effective_overrides,
+        "lineage": {}
     }
-    
-    excel_blob = _generate_excel_export(results, filename, audit_trail, config)
     
     # Generate LLM summary
     llm_summary = generate_llm_summary("RiskScorer", results, audit_trail)
     
-    return {
+    # Build final response
+    response = {
         "source_file": filename,
         "agent": "RiskScorer",
         "audit": audit_trail,
         "results": results,
-        "summary": llm_summary,
-        "excel_export": excel_blob
+        "summary": llm_summary
     }
+    
+    # Generate Excel export blob with complete response
+    excel_blob = _generate_excel_export(response)
+    response["excel_export"] = excel_blob
+    
+    return response
 
 
 def _assess_sheet_risk(df: pd.DataFrame, sheet_name: str, config: dict) -> dict:
@@ -367,43 +382,106 @@ def _calculate_aggregate_scores(results: dict) -> dict:
     }
 
 
-def _generate_excel_export(results: dict, filename: str, audit_trail: dict, config: dict) -> dict:
-    """Generate Excel export blob with risk assessment results."""
+def _generate_excel_export(response: dict) -> dict:
+    """Generate Excel export blob with complete JSON response."""
     from io import BytesIO
+    import json
+    
+    # Extract components from response
+    filename = response.get("source_file", "unknown")
+    agent_name = response.get("agent", "RiskScorer")
+    audit_trail = response.get("audit", {})
+    results = response.get("results", {})
+    summary = response.get("summary", "")
     
     try:
         output = BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             
-            summary_data = {
-                "Metric": [
-                    "Source File", "Agent", "Version", "Timestamp", "Compute Time (seconds)",
-                    "Total Sheets Analyzed", "Total Rows Analyzed", "Total Risks Detected",
-                    "Critical Risks", "High Risks", "Medium Risks", "Low Risks",
-                    "Average Risk Score", "PII Fields Detected", "Sensitive Fields Detected", "Governance Gaps"
-                ],
+            # Sheet 1: Response Overview
+            overview_data = {
+                "Field": ["Source File", "Agent", "Summary"],
                 "Value": [
-                    filename, audit_trail["agent_name"], audit_trail["agent_version"], audit_trail["timestamp"],
-                    audit_trail["compute_time_seconds"], audit_trail["scores"]["total_sheets_analyzed"],
-                    audit_trail["scores"]["total_rows_analyzed"], audit_trail["scores"]["total_risks_detected"],
-                    audit_trail["scores"]["critical_risks"], audit_trail["scores"]["high_risks"],
-                    audit_trail["scores"]["medium_risks"], audit_trail["scores"]["low_risks"],
-                    audit_trail["scores"]["average_risk_score"], audit_trail["scores"]["pii_fields_detected"],
-                    audit_trail["scores"]["sensitive_fields_detected"], audit_trail["scores"]["governance_gaps"]
+                    filename,
+                    agent_name,
+                    summary[:500] + "..." if len(summary) > 500 else summary  # Truncate long summaries
                 ]
             }
-            pd.DataFrame(summary_data).to_excel(writer, sheet_name="Summary", index=False)
+            overview_df = pd.DataFrame(overview_data)
+            overview_df.to_excel(writer, sheet_name="Response Overview", index=False)
             
-            if audit_trail["fields_scanned"]:
-                pd.DataFrame({"Field Name": audit_trail["fields_scanned"]}).to_excel(writer, sheet_name="Fields Scanned", index=False)
+            # Sheet 2: Risk Summary
+            if audit_trail:
+                risk_summary_data = {
+                    "Metric": [
+                        "Agent Name", "Agent Version", "Timestamp", "Compute Time (seconds)",
+                        "Total Sheets Analyzed", "Total Rows Analyzed", "Total Risks Detected",
+                        "Critical Risks", "High Risks", "Medium Risks", "Low Risks",
+                        "Average Risk Score", "PII Fields Detected", "Sensitive Fields Detected", "Governance Gaps"
+                    ],
+                    "Value": [
+                        audit_trail.get("agent_name", ""),
+                        audit_trail.get("agent_version", ""),
+                        audit_trail.get("timestamp", ""),
+                        audit_trail.get("compute_time_seconds", ""),
+                        audit_trail.get("scores", {}).get("total_sheets_analyzed", ""),
+                        audit_trail.get("scores", {}).get("total_rows_analyzed", ""),
+                        audit_trail.get("scores", {}).get("total_risks_detected", ""),
+                        audit_trail.get("scores", {}).get("critical_risks", ""),
+                        audit_trail.get("scores", {}).get("high_risks", ""),
+                        audit_trail.get("scores", {}).get("medium_risks", ""),
+                        audit_trail.get("scores", {}).get("low_risks", ""),
+                        audit_trail.get("scores", {}).get("average_risk_score", ""),
+                        audit_trail.get("scores", {}).get("pii_fields_detected", ""),
+                        audit_trail.get("scores", {}).get("sensitive_fields_detected", ""),
+                        audit_trail.get("scores", {}).get("governance_gaps", "")
+                    ]
+                }
+                risk_summary_df = pd.DataFrame(risk_summary_data)
+                risk_summary_df.to_excel(writer, sheet_name="Risk Summary", index=False)
             
-            if audit_trail["findings"]:
-                pd.DataFrame(audit_trail["findings"]).to_excel(writer, sheet_name="Findings", index=False)
+            # Sheet 3: Fields Scanned
+            if audit_trail.get("fields_scanned"):
+                fields_df = pd.DataFrame({"Field Name": audit_trail["fields_scanned"]})
+                fields_df.to_excel(writer, sheet_name="Fields Scanned", index=False)
             
-            pd.DataFrame({"Action": audit_trail["actions"]}).to_excel(writer, sheet_name="Actions", index=False)
+            # Sheet 4: Findings
+            if audit_trail.get("findings"):
+                findings_df = pd.DataFrame(audit_trail["findings"])
+                findings_df.to_excel(writer, sheet_name="Findings", index=False)
             
-            pd.DataFrame({"Parameter": list(config.keys()), "Value": list(config.values())}).to_excel(writer, sheet_name="Configuration", index=False)
+            # Sheet 5: Actions
+            if audit_trail.get("actions"):
+                actions_df = pd.DataFrame({"Action": audit_trail["actions"]})
+                actions_df.to_excel(writer, sheet_name="Actions", index=False)
             
+            # Sheet 6: Configuration
+            if audit_trail.get("overrides"):
+                config_data = {
+                    "Parameter": list(audit_trail["overrides"].keys()),
+                    "Value": list(audit_trail["overrides"].values())
+                }
+                config_df = pd.DataFrame(config_data)
+                config_df.to_excel(writer, sheet_name="Configuration", index=False)
+            
+            # Sheet 7: Routing Information
+            routing_data = []
+            for sheet_name, sheet_results in results.items():
+                if "routing" in sheet_results:
+                    routing_info = sheet_results["routing"]
+                    routing_data.append({
+                        "Sheet/Dataset": sheet_name,
+                        "Status": routing_info.get("status", ""),
+                        "Reason": routing_info.get("reason", ""),
+                        "Suggestion": routing_info.get("suggestion", ""),
+                        "Suggested Agent Endpoint": routing_info.get("suggested_agent_endpoint", "")
+                    })
+            
+            if routing_data:
+                routing_df = pd.DataFrame(routing_data)
+                routing_df.to_excel(writer, sheet_name="Routing", index=False)
+            
+            # Sheet 8+: Detailed risk assessments per sheet
             for sheet_name, sheet_result in results.items():
                 if sheet_result.get("status") == "success" and "data" in sheet_result:
                     data = sheet_result["data"]
@@ -422,17 +500,54 @@ def _generate_excel_export(results: dict, filename: str, audit_trail: dict, conf
                             })
                         safe_name = sheet_name[:25]
                         pd.DataFrame(risks_data).to_excel(writer, sheet_name=f"{safe_name}_Risks", index=False)
+                        
+                    # Add sheet-level metadata
+                    if "metadata" in sheet_result:
+                        metadata_data = {
+                            "Metric": list(sheet_result["metadata"].keys()),
+                            "Value": list(sheet_result["metadata"].values())
+                        }
+                        metadata_df = pd.DataFrame(metadata_data)
+                        metadata_df.to_excel(writer, sheet_name=f"Meta_{safe_name}", index=False)
             
-            if audit_trail["overrides"]:
-                pd.DataFrame({"Parameter": list(audit_trail["overrides"].keys()), "User Value": list(audit_trail["overrides"].values())}).to_excel(writer, sheet_name="User Overrides", index=False)
+            # Sheet: Complete JSON Response (for reference)
+            json_data = {
+                "Component": ["Complete JSON Response"],
+                "JSON Data": [json.dumps(response, indent=2, default=str)]
+            }
+            json_df = pd.DataFrame(json_data)
+            json_df.to_excel(writer, sheet_name="Raw JSON", index=False)
         
         output.seek(0)
         excel_bytes = output.read()
         excel_base64 = base64.b64encode(excel_bytes).decode('utf-8')
         
-        sheets_list = ["Summary", "Fields Scanned" if audit_trail["fields_scanned"] else None, "Findings" if audit_trail["findings"] else None, "Actions", "Configuration", "User Overrides" if audit_trail["overrides"] else None]
-        sheets_list = [s for s in sheets_list if s]
-        sheets_list.extend([f"{sheet[:25]}_Risks" for sheet in results.keys()])
+        # Build dynamic sheet list
+        sheets_included = ["Response Overview"]
+        if audit_trail:
+            sheets_included.append("Risk Summary")
+        if audit_trail.get("fields_scanned"):
+            sheets_included.append("Fields Scanned")
+        if audit_trail.get("findings"):
+            sheets_included.append("Findings")
+        if audit_trail.get("actions"):
+            sheets_included.append("Actions")
+        if audit_trail.get("overrides"):
+            sheets_included.append("Configuration")
+        
+        # Check if any routing data exists
+        has_routing = any("routing" in sheet_results for sheet_results in results.values())
+        if has_routing:
+            sheets_included.append("Routing")
+        
+        # Add risk assessment sheets
+        for sheet_name in results.keys():
+            safe_sheet_name = sheet_name[:25]
+            sheets_included.extend([f"{safe_sheet_name}_Risks", f"Meta_{safe_sheet_name}"])
+        
+        sheets_included.append("Raw JSON")
+        
+        sheets_list = [sheet for sheet in sheets_included if sheet]  # Remove None values
         
         return {
             "filename": f"{filename.rsplit('.', 1)[0]}_risk_report.xlsx",

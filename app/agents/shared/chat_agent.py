@@ -8,7 +8,8 @@ from fastapi import HTTPException
 AGENT_VERSION = "1.1.0"  # Version for the chat agent
 
 # Securely get the API key from environment variables (loaded from .env by main.py)
-api_key = os.getenv("OPENAI_API_KEY")
+# api_key = os.getenv("OPENAI_API_KEY")
+api_key = "sk-"
 if not api_key:
     raise ValueError("The OPENAI_API_KEY environment variable is not set. Please add it to your .env file.")
 

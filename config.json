@@ -21,5 +21,100 @@
     "pii_detection_enabled": true,
     "sensitive_field_detection_enabled": true,
     "governance_check_enabled": true
+  },
+  "GovernanceChecker": {
+    "required_lineage_fields": ["source_system", "created_date", "modified_date"],
+    "required_consent_fields": ["consent_status", "consent_date", "data_subject_id"],
+    "required_classification_fields": ["data_classification", "sensitivity_level", "retention_period"],
+    "valid_consent_statuses": ["granted", "denied", "withdrawn", "pending"],
+    "valid_data_classifications": ["public", "internal", "confidential", "restricted"],
+    "valid_sensitivity_levels": ["low", "medium", "high", "critical"],
+    "lineage_weight": 0.3,
+    "consent_weight": 0.4,
+    "classification_weight": 0.3,
+    "compliance_threshold": 80,
+    "needs_review_threshold": 60,
+    "lineage_null_threshold": 5
+  },
+  "TestCoverageAgent": {
+    "unique_columns": ["id", "email", "username", "employee_id"],
+    "range_tests": {
+      "age": {"min": 0, "max": 120},
+      "salary": {"min": 0, "max": 1000000},
+      "score": {"min": 0, "max": 100},
+      "rating": {"min": 1, "max": 5},
+      "quantity": {"min": 0},
+      "price": {"min": 0},
+      "percentage": {"min": 0, "max": 100}
+    },
+    "format_tests": {
+      "email": {
+        "pattern": "^[\\w\\.-]+@[\\w\\.-]+\\.[a-zA-Z]{2,}$",
+        "description": "valid email format"
+      },
+      "phone": {
+        "pattern": "^\\+?[1-9]\\d{1,14}$|^\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}$",
+        "description": "phone number format"
+      },
+      "ssn": {
+        "pattern": "^\\d{3}-\\d{2}-\\d{4}$",
+        "description": "SSN format (XXX-XX-XXXX)"
+      },
+      "zip_code": {
+        "pattern": "^\\d{5}(-\\d{4})?$",
+        "description": "US ZIP code format"
+      },
+      "date": {
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+        "description": "ISO date format (YYYY-MM-DD)"
+      },
+      "credit_card": {
+        "pattern": "^\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}$",
+        "description": "credit card number format"
+      },
+      "url": {
+        "pattern": "^https?:\\/\\/[\\w\\.-]+\\.[a-zA-Z]{2,}(\\/.*)?$",
+        "description": "valid URL format"
+      },
+      "ip_address": {
+        "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
+        "description": "IPv4 address format"
+      },
+      "product_code": {
+        "pattern": "^[A-Z]{2,3}-\\d{4,6}$",
+        "description": "product code format (XX-XXXX)"
+      },
+      "currency": {
+        "pattern": "^\\$?\\d{1,3}(,\\d{3})*(\\.\\d{2})?$",
+        "description": "currency format"
+      }
+    },
+    "uniqueness_weight": 0.4,
+    "range_weight": 0.3,
+    "format_weight": 0.3,
+    "excellent_threshold": 90,
+    "good_threshold": 75
+  },
+  "SchemaDriftReporter": {
+    "added_columns_weight": 0.1,
+    "removed_columns_weight": 0.4,
+    "type_changes_weight": 0.3,
+    "nullable_changes_weight": 0.15,
+    "constraint_changes_weight": 0.05,
+    "critical_drift_threshold": 50,
+    "moderate_drift_threshold": 20
+  },
+  "NullHandler": {
+    "global_strategy": null,
+    "column_strategies": {
+      "auto": true
+    },
+    "fill_values": {},
+    "knn_neighbors": 5,
+    "null_reduction_weight": 0.5,
+    "data_retention_weight": 0.3,
+    "column_retention_weight": 0.2,
+    "excellent_threshold": 90,
+    "good_threshold": 75
   }
 }

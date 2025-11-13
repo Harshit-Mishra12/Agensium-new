@@ -318,6 +318,13 @@ def detect_drift(baseline_contents: bytes, current_contents: bytes, baseline_fil
             findings = _extract_findings_from_result(sheet_result)
             all_findings.extend(findings)
     
+    # Populate overrides with actual configuration values being used
+    effective_overrides = {
+        "p_value_threshold": config.get("p_value_threshold"),
+        "psi_alert_threshold": config.get("psi_alert_threshold"),
+        "psi_critical_threshold": config.get("psi_critical_threshold")
+    }
+    
     # Build comprehensive audit trail
     audit_trail = {
         "agent_name": "DriftDetector",
@@ -343,7 +350,8 @@ def detect_drift(baseline_contents: bytes, current_contents: bytes, baseline_fil
             "fields_with_drift": drift_detected_count,
             "total_fields_compared": len(set(all_fields_scanned))
         },
-        "overrides": user_overrides if user_overrides else {}
+        "overrides": effective_overrides,
+        "lineage": {}
     }
     
     # Generate Excel export

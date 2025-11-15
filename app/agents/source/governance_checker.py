@@ -323,23 +323,191 @@ def _generate_routing_info(governance_score: dict, total_issues: int, critical_i
                 "suggested_agent_endpoint": "/run-tool/governance"
             }
 
+def _detect_governance_row_issues(df: pd.DataFrame, config: dict) -> list:
+    """
+    Detect row-level governance issues.
+    
+    Args:
+        df: DataFrame to check
+        config: Configuration dictionary
+        
+    Returns:
+        list: Row-level governance issues
+    """
+    issues = []
+    total_rows = len(df)
+    
+    # Check for missing required lineage fields
+    required_lineage_fields = config.get('required_lineage_fields', [])
+    for field in required_lineage_fields:
+        if field in df.columns:
+            null_mask = df[field].isna()
+            null_indices = df.index[null_mask].tolist()
+            # Limit to first 20 for performance
+            for idx in null_indices[:20]:
+                issues.append({
+                    "row_index": int(idx),
+                    "column": field,
+                    "issue_type": "missing_lineage_data",
+                    "severity": "critical",
+                    "value": None,
+                    "message": f"Missing required lineage field '{field}' at row {idx}"
+                })
+    
+    # Check for missing required consent fields
+    required_consent_fields = config.get('required_consent_fields', [])
+    for field in required_consent_fields:
+        if field in df.columns:
+            null_mask = df[field].isna()
+            null_indices = df.index[null_mask].tolist()
+            # Limit to first 20 for performance
+            for idx in null_indices[:20]:
+                issues.append({
+                    "row_index": int(idx),
+                    "column": field,
+                    "issue_type": "missing_consent_data",
+                    "severity": "critical",
+                    "value": None,
+                    "message": f"Missing required consent field '{field}' at row {idx}"
+                })
+    
+    # Check for invalid consent statuses
+    if 'consent_status' in df.columns:
+        valid_statuses = config.get('valid_consent_statuses', ['granted', 'denied', 'withdrawn', 'pending'])
+        invalid_mask = ~df['consent_status'].isin(valid_statuses + [None])
+        invalid_indices = df.index[invalid_mask].tolist()
+        # Limit to first 20 for performance
+        for idx in invalid_indices[:20]:
+            value = df.loc[idx, 'consent_status']
+            issues.append({
+                "row_index": int(idx),
+                "column": "consent_status",
+                "issue_type": "invalid_consent_status",
+                "severity": "critical",
+                "value": str(value) if pd.notna(value) else None,
+                "message": f"Invalid consent status '{value}' at row {idx}",
+                "valid_values": valid_statuses
+            })
+    
+    # Check for invalid data classifications
+    if 'data_classification' in df.columns:
+        valid_classifications = config.get('valid_data_classifications', ['public', 'internal', 'confidential', 'restricted'])
+        invalid_mask = ~df['data_classification'].isin(valid_classifications + [None])
+        invalid_indices = df.index[invalid_mask].tolist()
+        # Limit to first 20 for performance
+        for idx in invalid_indices[:20]:
+            value = df.loc[idx, 'data_classification']
+            issues.append({
+                "row_index": int(idx),
+                "column": "data_classification",
+                "issue_type": "invalid_data_classification",
+                "severity": "critical",
+                "value": str(value) if pd.notna(value) else None,
+                "message": f"Invalid data classification '{value}' at row {idx}",
+                "valid_values": valid_classifications
+            })
+    
+    # Check for PII in public classified data
+    pii_patterns = config.get('pii_patterns', {
+        'email': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+        'phone': r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b',
+        'ssn': r'\b\d{3}-\d{2}-\d{4}\b'
+    })
+    
+    if 'data_classification' in df.columns:
+        public_mask = df['data_classification'] == 'public'
+        public_indices = df.index[public_mask].tolist()
+        
+        for col in df.select_dtypes(include=['object']).columns:
+            if col == 'data_classification':
+                continue
+            
+            col_data = df[col].astype(str)
+            for pii_type, pattern in pii_patterns.items():
+                pii_mask = col_data.str.contains(pattern, regex=True, na=False)
+                pii_public_indices = [idx for idx in public_indices if idx in df.index[pii_mask].tolist()]
+                
+                # Limit to first 10 for performance
+                for idx in pii_public_indices[:10]:
+                    value = df.loc[idx, col]
+                    issues.append({
+                        "row_index": int(idx),
+                        "column": col,
+                        "issue_type": "pii_in_public_data",
+                        "severity": "critical",
+                        "value": str(value) if pd.notna(value) else None,
+                        "message": f"PII ({pii_type}) detected in publicly classified data at row {idx}, column '{col}'",
+                        "pii_type": pii_type
+                    })
+    
+    return issues
+
+def _summarize_governance_issues(issues: list) -> dict:
+    """
+    Summarize row-level governance issues by type and severity.
+    
+    Args:
+        issues: List of row-level issues
+        
+    Returns:
+        dict: Summary statistics of issues
+    """
+    summary = {
+        "total_issues": len(issues),
+        "by_type": {},
+        "by_severity": {},
+        "by_column": {}
+    }
+    
+    for issue in issues:
+        # Count by type
+        issue_type = issue.get("issue_type", "unknown")
+        summary["by_type"][issue_type] = summary["by_type"].get(issue_type, 0) + 1
+        
+        # Count by severity
+        severity = issue.get("severity", "info")
+        summary["by_severity"][severity] = summary["by_severity"].get(severity, 0) + 1
+        
+        # Count by column
+        column = issue.get("column")
+        if column:
+            summary["by_column"][column] = summary["by_column"].get(column, 0) + 1
+    
+    return summary
+
 def _profile_dataframe(df: pd.DataFrame, config: dict) -> Dict[str, Any]:
     """
     Profiles a single DataFrame for governance compliance.
     """
     if df.empty:
         return {
+            "status": "success",
+            "metadata": {
+                "total_rows": 0,
+                "total_issues": 0
+            },
+            "routing": {
+                "status": "No Data",
+                "reason": "Dataset is empty, cannot perform governance validation.",
+                "suggestion": "Provide a dataset with data to analyze.",
+                "suggested_agent_endpoint": "/run-tool/profile-my-data"
+            },
             "data": {
                 "governance_score": {"overall": 0, "lineage": 0, "consent": 0, "classification": 0, "status": "non_compliant"},
-                "summary": "Dataset is empty, cannot perform governance validation."
+                "summary": "Dataset is empty, cannot perform governance validation.",
+                "row_level_issues": []
             },
-            "alerts": [{"level": "critical", "message": "Dataset is empty"}]
+            "alerts": [{"level": "critical", "message": "Dataset is empty"}],
+            "issue_summary": {"total_issues": 0, "by_type": {}, "by_severity": {}, "by_column": {}}
         }
     
     # Perform validation checks
     lineage_result = _validate_lineage(df, config)
     consent_result = _validate_consent(df, config)
     classification_result = _validate_classification_tags(df, config)
+    
+    # Detect row-level governance issues
+    row_level_issues = _detect_governance_row_issues(df, config)
     
     # Calculate overall governance score
     governance_score = _calculate_governance_score(lineage_result, consent_result, classification_result, config)
@@ -370,8 +538,8 @@ def _profile_dataframe(df: pd.DataFrame, config: dict) -> Dict[str, Any]:
     return {
         "status": "success",
         "metadata": {
-            "total_rows_analyzed": len(df),
-            "total_issues": total_issues
+            "total_rows": len(df),
+            "total_issues": len(row_level_issues)
         },
         "routing": routing_info,
         "data": {
@@ -381,14 +549,19 @@ def _profile_dataframe(df: pd.DataFrame, config: dict) -> Dict[str, Any]:
             "classification_validation": classification_result,
             "summary": summary,
             "total_records": len(df),
-            "fields_analyzed": list(df.columns)
+            "fields_analyzed": list(df.columns),
+            "row_level_issues": row_level_issues[:100]  # Limit to first 100 issues for performance
         },
-        "alerts": alerts
+        "alerts": alerts,
+        "issue_summary": _summarize_governance_issues(row_level_issues)
     }
 
-def _generate_excel_export(results: dict, filename: str, audit_trail: dict, config: dict) -> str:
+def _generate_excel_export(results: dict, filename: str, audit_trail: dict, config: dict) -> dict:
     """
     Generates Excel export with governance validation results.
+    
+    Returns:
+        dict: Excel export metadata and base64-encoded blob
     """
     try:
         output = io.BytesIO()
@@ -435,11 +608,27 @@ def _generate_excel_export(results: dict, filename: str, audit_trail: dict, conf
             config_df.to_excel(writer, sheet_name='Configuration', index=False)
         
         output.seek(0)
-        return base64.b64encode(output.read()).decode('utf-8')
+        excel_bytes = output.read()
+        excel_base64 = base64.b64encode(excel_bytes).decode('utf-8')
+        
+        return {
+            "filename": f"{filename.rsplit('.', 1)[0]}_governance_report.xlsx",
+            "format": "xlsx",
+            "base64_data": excel_base64,
+            "size_bytes": len(excel_bytes),
+            "download_ready": True
+        }
     
     except Exception as e:
         warnings.warn(f"Excel export failed: {str(e)}")
-        return ""
+        return {
+            "filename": f"{filename.rsplit('.', 1)[0]}_governance_report.xlsx",
+            "format": "xlsx",
+            "base64_data": "",
+            "size_bytes": 0,
+            "download_ready": False,
+            "error": str(e)
+        }
 
 def _extract_findings_from_result(sheet_result: dict, sheet_name: str) -> List[dict]:
     """
@@ -548,7 +737,18 @@ def check_governance(file_contents: bytes, filename: str, config: dict = None, u
     try:
         # File handling logic
         if file_extension == 'csv':
-            df = pd.read_csv(io.BytesIO(file_contents))
+            try:
+                # First attempt with default settings
+                df = pd.read_csv(io.BytesIO(file_contents))
+            except pd.errors.ParserError as e:
+                # If parsing fails due to field count mismatch, try with error handling
+                try:
+                    df = pd.read_csv(io.BytesIO(file_contents), on_bad_lines='skip')
+                    # Add warning about skipped lines
+                    print(f"Warning: Some lines were skipped due to field count mismatch in {filename}")
+                except Exception:
+                    # Final fallback: read with flexible column handling
+                    df = pd.read_csv(io.BytesIO(file_contents), on_bad_lines='skip', sep=',', quotechar='"', skipinitialspace=True)
             sheet_name = filename.rsplit('.', 1)[0]
             all_fields_scanned.extend(list(df.columns))
             total_rows_analyzed += len(df)
@@ -574,7 +774,6 @@ def check_governance(file_contents: bytes, filename: str, config: dict = None, u
                 all_findings.extend(findings)
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported file format: {file_extension}")
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process file '{filename}'. Error: {str(e)}")
 
@@ -583,6 +782,16 @@ def check_governance(file_contents: bytes, filename: str, config: dict = None, u
     
     # Calculate aggregate scores
     aggregate_scores = _calculate_aggregate_scores(results)
+    
+    # Populate overrides with actual configuration values being used
+    effective_overrides = {
+        "compliance_threshold": config.get("compliance_threshold"),
+        "needs_review_threshold": config.get("needs_review_threshold"),
+        "lineage_weight": config.get("lineage_weight"),
+        "consent_weight": config.get("consent_weight"),
+        "classification_weight": config.get("classification_weight"),
+        "lineage_null_threshold": config.get("lineage_null_threshold")
+    }
     
     # Build comprehensive audit trail
     audit_trail = {
@@ -613,20 +822,24 @@ def check_governance(file_contents: bytes, filename: str, config: dict = None, u
             "average_consent_score": aggregate_scores.get('average_consent', 0),
             "average_classification_score": aggregate_scores.get('average_classification', 0)
         },
-        "overrides": user_overrides if user_overrides else {}
+        "overrides": effective_overrides,
+        "lineage": {}
     }
-    
-    # Generate Excel export blob
-    excel_blob = _generate_excel_export(results, filename, audit_trail, config)
     
     # Generate LLM summary
     llm_summary = generate_llm_summary("GovernanceChecker", results, audit_trail)
-
-    return {
+    
+    # Build final response
+    response = {
         "source_file": filename,
         "agent": "GovernanceChecker",
         "audit": audit_trail,
         "results": results,
-        "summary": llm_summary,
-        "excel_export": excel_blob
+        "summary": llm_summary
     }
+    
+    # Generate Excel export blob with complete response
+    excel_blob = _generate_excel_export(results, filename, audit_trail, config)
+    response["excel_export"] = excel_blob
+
+    return response

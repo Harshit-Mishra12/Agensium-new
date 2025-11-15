@@ -283,27 +283,56 @@ def _generate_routing_info(test_score: dict, total_issues: int, critical_issues:
             "suggested_agent_endpoint": "/run-tool/cleaner"
         }
     else:  # needs_improvement
-        if critical_issues > 0:
-            return {
-                "status": "Poor Coverage",
-                "reason": f"Dataset has {critical_issues} critical test failures that must be addressed. Score: {overall_score}/100.",
-                "suggestion": "Address critical test failures and improve test coverage before using this data.",
-                "suggested_agent_endpoint": "/run-tool/cleaner"
-            }
-        else:
-            return {
-                "status": "Needs Improvement",
-                "reason": f"Dataset test coverage needs improvement. Score: {overall_score}/100.",
-                "suggestion": "Add more comprehensive tests and fix existing test failures.",
-                "suggested_agent_endpoint": "/run-tool/cleaner"
-            }
+       
+        return {
+            "status": "Poor Coverage",
+            "reason": f"Dataset has {critical_issues} critical test failures that must be addressed. Score: {overall_score}/100.",
+            "suggestion": "Address critical test failures and improve test coverage before using this data.",
+            "suggested_agent_endpoint": "/run-tool/cleaner"
+        }
+
+
+def _detect_test_coverage_row_issues(df: pd.DataFrame, config: dict) -> List[Dict[str, Any]]:
+    """Detect row-level test coverage issues in the DataFrame."""
+    issues = []
+    
+    # Check for rows with missing values in critical columns
+    critical_columns = config.get('critical_columns', [])
+    for col in critical_columns:
+        if col in df.columns:
+            missing_rows = df[df[col].isnull()].index.tolist()
+            for row_idx in missing_rows:
+                issues.append({
+                    "row_index": int(row_idx),
+                    "column": col,
+                    "issue_type": "missing_critical_value",
+                    "description": f"Missing value in critical column '{col}'",
+                    "severity": "high"
+                })
+    
+    # Check for duplicate rows if uniqueness is required
+    if config.get('check_duplicates', True):
+        duplicates = df[df.duplicated(keep=False)]
+        for idx in duplicates.index:
+            issues.append({
+                "row_index": int(idx),
+                "column": "all",
+                "issue_type": "duplicate_row",
+                "description": "Duplicate row detected",
+                "severity": "medium"
+            })
+    
+    return issues
 
 def _profile_dataframe(df: pd.DataFrame, config: dict) -> Dict[str, Any]:
     """Profile a DataFrame for test coverage."""
     if df.empty:
         return {
             "status": "success",
-            "metadata": {"total_rows_analyzed": 0, "total_issues": 1},
+            "metadata": {
+                "total_rows": 0,
+                "total_issues": 0
+            },
             "routing": {
                 "status": "No Data",
                 "reason": "Dataset is empty, cannot perform test coverage analysis.",
@@ -312,15 +341,20 @@ def _profile_dataframe(df: pd.DataFrame, config: dict) -> Dict[str, Any]:
             },
             "data": {
                 "test_coverage_score": {"overall": 0, "uniqueness": 0, "range": 0, "format": 0, "status": "needs_improvement"},
-                "summary": "Dataset is empty, cannot perform test coverage analysis."
+                "summary": "Dataset is empty, cannot perform test coverage analysis.",
+                "row_level_issues": []
             },
-            "alerts": [{"level": "critical", "message": "Dataset is empty"}]
+            "alerts": [{"level": "critical", "message": "Dataset is empty"}],
+            "issue_summary": {"total_issues": 0, "by_type": {}, "by_severity": {}, "by_column": {}}
         }
     
     # Perform test coverage checks
     uniqueness_result = _test_uniqueness(df, config)
     range_result = _test_ranges(df, config)
     format_result = _test_formats(df, config)
+    
+    # Detect row-level test coverage issues
+    row_level_issues = _detect_test_coverage_row_issues(df, config)
     
     # Calculate overall test coverage score
     test_coverage_score = _calculate_test_coverage_score(uniqueness_result, range_result, format_result, config)
@@ -354,8 +388,8 @@ def _profile_dataframe(df: pd.DataFrame, config: dict) -> Dict[str, Any]:
     return {
         "status": "success",
         "metadata": {
-            "total_rows_analyzed": len(df),
-            "total_issues": total_issues
+            "total_rows": len(df),
+            "total_issues": len(row_level_issues)
         },
         "routing": routing_info,
         "data": {
@@ -367,10 +401,250 @@ def _profile_dataframe(df: pd.DataFrame, config: dict) -> Dict[str, Any]:
             "total_records": len(df),
             "total_tests_executed": total_tests,
             "tests_passed": passed_tests,
-            "fields_analyzed": list(df.columns)
+            "fields_analyzed": list(df.columns),
+            "row_level_issues": row_level_issues[:100]  # Limit to first 100 issues for performance
         },
-        "alerts": alerts
+        "alerts": alerts,
+        "issue_summary": _summarize_test_issues(row_level_issues)
     }
+
+def _summarize_test_issues(row_level_issues: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Summarize test coverage issues for reporting."""
+    if not row_level_issues:
+        return {
+            "total_issues": 0,
+            "critical_issues": 0,
+            "issue_types": {},
+            "severity_breakdown": {}
+        }
+    
+    issue_types = {}
+    severity_breakdown = {"high": 0, "medium": 0, "low": 0}
+    critical_issues = 0
+    
+    for issue in row_level_issues:
+        issue_type = issue.get('issue_type', 'unknown')
+        severity = issue.get('severity', 'low')
+        
+        # Count issue types
+        issue_types[issue_type] = issue_types.get(issue_type, 0) + 1
+        
+        # Count severity levels
+        if severity in severity_breakdown:
+            severity_breakdown[severity] += 1
+        
+        # Count critical issues (high severity)
+        if severity == 'high':
+            critical_issues += 1
+    
+    return {
+        "total_issues": len(row_level_issues),
+        "critical_issues": critical_issues,
+        "issue_types": issue_types,
+        "severity_breakdown": severity_breakdown
+    }
+
+def _generate_excel_export(response: dict) -> dict:
+    """
+    Generate Excel export blob with complete JSON response.
+    
+    Args:
+        response: Complete JSON response containing source_file, agent, audit, results, and summary
+        
+    Returns:
+        dict: Excel export metadata and base64-encoded blob
+    """
+    import json
+    
+    # Extract components from response
+    filename = response.get("source_file", "unknown")
+    agent_name = response.get("agent", "TestCoverageAgent")
+    audit_trail = response.get("audit", {})
+    results = response.get("results", {})
+    summary = response.get("summary", "")
+    
+    try:
+        # Create Excel writer
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            
+            # Sheet 1: Response Overview
+            overview_data = {
+                "Field": ["Source File", "Agent", "Summary"],
+                "Value": [
+                    filename,
+                    agent_name,
+                    summary[:500] + "..." if len(summary) > 500 else summary  # Truncate long summaries
+                ]
+            }
+            overview_df = pd.DataFrame(overview_data)
+            overview_df.to_excel(writer, sheet_name="Response Overview", index=False)
+            
+            # Sheet 2: Test Coverage Summary
+            if results:
+                summary_data = []
+                for sheet_name, result in results.items():
+                    if 'data' in result and 'test_coverage_score' in result['data']:
+                        score_data = result['data']['test_coverage_score']
+                        summary_data.append({
+                            'Sheet': sheet_name,
+                            'Overall_Score': score_data.get('overall', 0),
+                            'Uniqueness_Score': score_data.get('uniqueness', 0),
+                            'Range_Score': score_data.get('range', 0),
+                            'Format_Score': score_data.get('format', 0),
+                            'Status': score_data.get('status', 'unknown'),
+                            'Total_Records': result['data'].get('total_records', 0),
+                            'Tests_Executed': result['data'].get('total_tests_executed', 0),
+                            'Tests_Passed': result['data'].get('tests_passed', 0),
+                            'Total_Issues': len(result.get('alerts', []))
+                        })
+                
+                if summary_data:
+                    summary_df = pd.DataFrame(summary_data)
+                    summary_df.to_excel(writer, sheet_name="Test Coverage Summary", index=False)
+            
+            # Sheet 3: Audit Summary
+            if audit_trail:
+                audit_summary_data = {
+                    "Metric": [
+                        "Agent Name",
+                        "Agent Version", 
+                        "Timestamp",
+                        "Compute Time (seconds)",
+                        "Total Sheets Analyzed",
+                        "Total Fields Scanned",
+                        "Total Alerts Generated",
+                        "Critical Alerts",
+                        "Warning Alerts",
+                        "Info Alerts"
+                    ],
+                    "Value": [
+                        audit_trail.get("agent_name", ""),
+                        audit_trail.get("agent_version", ""),
+                        audit_trail.get("timestamp", ""),
+                        audit_trail.get("compute_time_seconds", 0),
+                        audit_trail.get("scores", {}).get("total_sheets_analyzed", 0),
+                        len(audit_trail.get("fields_scanned", [])),
+                        audit_trail.get("scores", {}).get("total_alerts_generated", 0),
+                        audit_trail.get("scores", {}).get("critical_alerts", 0),
+                        audit_trail.get("scores", {}).get("warning_alerts", 0),
+                        audit_trail.get("scores", {}).get("info_alerts", 0)
+                    ]
+                }
+                audit_summary_df = pd.DataFrame(audit_summary_data)
+                audit_summary_df.to_excel(writer, sheet_name="Audit Summary", index=False)
+            
+            # Sheet 4: Fields Scanned
+            if audit_trail.get("fields_scanned"):
+                fields_df = pd.DataFrame({
+                    "Field Name": audit_trail["fields_scanned"]
+                })
+                fields_df.to_excel(writer, sheet_name="Fields Scanned", index=False)
+            
+            # Sheet 5: Findings
+            if audit_trail.get("findings"):
+                findings_df = pd.DataFrame(audit_trail["findings"])
+                findings_df.to_excel(writer, sheet_name="Findings", index=False)
+            
+            # Sheet 6: Actions
+            if audit_trail.get("actions"):
+                actions_df = pd.DataFrame({
+                    "Action": audit_trail["actions"]
+                })
+                actions_df.to_excel(writer, sheet_name="Actions", index=False)
+            
+            # Sheet 7: Configuration/Overrides
+            if audit_trail.get("overrides"):
+                config_data = {
+                    "Parameter": list(audit_trail["overrides"].keys()),
+                    "Value": list(audit_trail["overrides"].values())
+                }
+                config_df = pd.DataFrame(config_data)
+                config_df.to_excel(writer, sheet_name="Configuration", index=False)
+            
+            # Sheet 8: Test Results Details
+            test_details_data = []
+            for sheet_name, sheet_results in results.items():
+                if "data" in sheet_results:
+                    data = sheet_results["data"]
+                    
+                    # Uniqueness tests
+                    for test in data.get("uniqueness_tests", {}).get("tests_performed", []):
+                        test_details_data.append({
+                            "Sheet": sheet_name,
+                            "Test_Type": "Uniqueness",
+                            "Column": test.get("column", ""),
+                            "Passed": test.get("passed", False),
+                            "Total_Values": test.get("total_values", 0),
+                            "Issues_Found": test.get("duplicate_count", 0),
+                            "Issue_Percentage": test.get("duplicate_percentage", 0),
+                            "Details": f"Duplicates: {test.get('duplicate_count', 0)}"
+                        })
+                    
+                    # Range tests
+                    for test in data.get("range_tests", {}).get("tests_performed", []):
+                        test_details_data.append({
+                            "Sheet": sheet_name,
+                            "Test_Type": "Range",
+                            "Column": test.get("column", ""),
+                            "Passed": test.get("passed", False),
+                            "Total_Values": test.get("total_values", 0),
+                            "Issues_Found": test.get("violations", 0),
+                            "Issue_Percentage": test.get("violation_percentage", 0),
+                            "Details": f"Range: [{test.get('min_constraint', 'N/A')}, {test.get('max_constraint', 'N/A')}]"
+                        })
+                    
+                    # Format tests
+                    for test in data.get("format_tests", {}).get("tests_performed", []):
+                        test_details_data.append({
+                            "Sheet": sheet_name,
+                            "Test_Type": "Format",
+                            "Column": test.get("column", ""),
+                            "Passed": test.get("passed", False),
+                            "Total_Values": test.get("total_values", 0),
+                            "Issues_Found": test.get("violations", 0),
+                            "Issue_Percentage": test.get("violation_percentage", 0),
+                            "Details": f"Pattern: {test.get('description', test.get('pattern', 'N/A'))}"
+                        })
+            
+            if test_details_data:
+                test_details_df = pd.DataFrame(test_details_data)
+                test_details_df.to_excel(writer, sheet_name="Test Details", index=False)
+            
+            # Sheet: Complete JSON Response (for reference)
+            json_data = {
+                "Component": ["Complete JSON Response"],
+                "JSON Data": [json.dumps(response, indent=2, default=str)]
+            }
+            json_df = pd.DataFrame(json_data)
+            json_df.to_excel(writer, sheet_name="Raw JSON", index=False)
+        
+        # Get the Excel file as bytes
+        output.seek(0)
+        excel_bytes = output.read()
+        
+        # Encode to base64
+        excel_base64 = base64.b64encode(excel_bytes).decode('utf-8')
+        
+        return {
+            "filename": f"{filename.rsplit('.', 1)[0]}_test_coverage_report.xlsx",
+            "format": "xlsx",
+            "base64_data": excel_base64,
+            "size_bytes": len(excel_bytes),
+            "download_ready": True
+        }
+        
+    except Exception as e:
+        # If Excel generation fails, return error info
+        warnings.warn(f"Excel export failed: {str(e)}")
+        return {
+            "filename": f"{filename.rsplit('.', 1)[0]}_test_coverage_report.xlsx",
+            "format": "xlsx",
+            "base64_data": "",
+            "size_bytes": 0,
+            "download_ready": False,
+            "error": str(e)
+        }
 
 def check_test_coverage(file_contents: bytes, filename: str, config: dict = None, user_overrides: dict = None):
     """Main function for the TestCoverageAgent."""
@@ -417,13 +691,47 @@ def check_test_coverage(file_contents: bytes, filename: str, config: dict = None
     end_time = time.time()
     compute_time = end_time - start_time
     
-    # Build audit trail
+    # Extract findings from results for audit trail
+    all_findings = []
+    for sheet_name, result in results.items():
+        for alert in result.get('alerts', []):
+            finding = {
+                "severity": alert.get("level", "info"),
+                "sheet": sheet_name,
+                "issue": alert.get("message", ""),
+                "category": "test_coverage",
+                "type": alert.get("type", "unknown")
+            }
+            
+            # Add score context if available
+            if 'data' in result and 'test_coverage_score' in result['data']:
+                scores = result['data']['test_coverage_score']
+                finding["overall_score"] = scores.get("overall", 0)
+                finding["uniqueness_score"] = scores.get("uniqueness", 0)
+                finding["range_score"] = scores.get("range", 0)
+                finding["format_score"] = scores.get("format", 0)
+                finding["test_status"] = scores.get("status", "unknown")
+            
+            all_findings.append(finding)
+    
+    # Populate overrides with actual configuration values being used
+    effective_overrides = {
+        "uniqueness_weight": config.get("uniqueness_weight"),
+        "range_weight": config.get("range_weight"),
+        "format_weight": config.get("format_weight"),
+        "excellent_threshold": config.get("excellent_threshold"),
+        "good_threshold": config.get("good_threshold")
+    }
+    
+    # Build comprehensive audit trail
     audit_trail = {
         "agent_name": "TestCoverageAgent",
         "timestamp": run_timestamp.isoformat(),
+        "profile_date": run_timestamp.isoformat(),  # Keep for backward compatibility
         "agent_version": AGENT_VERSION,
         "compute_time_seconds": round(compute_time, 2),
         "fields_scanned": list(set(all_fields_scanned)),
+        "findings": all_findings,
         "actions": [
             f"Analyzed {total_rows_analyzed} rows across {len(results)} sheet(s)",
             f"Generated {total_alerts_generated} alert(s)",
@@ -435,19 +743,29 @@ def check_test_coverage(file_contents: bytes, filename: str, config: dict = None
         "scores": {
             "total_sheets_analyzed": len(results),
             "total_rows_analyzed": total_rows_analyzed,
-            "total_alerts_generated": total_alerts_generated
+            "total_alerts_generated": total_alerts_generated,
+            "critical_alerts": sum(1 for f in all_findings if f.get('severity') == 'critical'),
+            "warning_alerts": sum(1 for f in all_findings if f.get('severity') == 'warning'),
+            "info_alerts": sum(1 for f in all_findings if f.get('severity') == 'info')
         },
-        "overrides": user_overrides if user_overrides else {}
+        "overrides": effective_overrides,
+        "lineage": {}
     }
     
     # Generate LLM summary
     llm_summary = generate_llm_summary("TestCoverageAgent", results, audit_trail)
 
-    return {
+    # Build final response
+    response = {
         "source_file": filename,
         "agent": "TestCoverageAgent",
         "audit": audit_trail,
         "results": results,
-        "summary": llm_summary,
-        "excel_export": ""
+        "summary": llm_summary
     }
+    
+    # Generate Excel export blob with complete response
+    excel_blob = _generate_excel_export(response)
+    response["excel_export"] = excel_blob
+    
+    return response

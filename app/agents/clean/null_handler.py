@@ -20,7 +20,21 @@ def _convert_numpy_types(obj):
     if isinstance(obj, np.integer):
         return int(obj)
     elif isinstance(obj, np.floating):
-        return float(obj)
+        val = float(obj)
+        # Handle non-JSON compliant float values
+        if np.isnan(val):
+            return None
+        elif np.isinf(val):
+            return str(val)  # Convert inf/-inf to string
+        return val
+    elif isinstance(obj, (float, int)) and not isinstance(obj, bool):
+        # Handle regular Python floats that might be inf/nan
+        if isinstance(obj, float):
+            if np.isnan(obj):
+                return None
+            elif np.isinf(obj):
+                return str(obj)
+        return obj
     elif isinstance(obj, np.ndarray):
         return obj.tolist()
     elif isinstance(obj, dict):
@@ -306,6 +320,30 @@ def _calculate_cleaning_score(original_df: pd.DataFrame, cleaned_df: pd.DataFram
         }
     })
 
+def _detect_null_row_issues(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """Detect row-level null issues in the DataFrame."""
+    issues = []
+    
+    # Check for rows with null values
+    for idx, row in df.iterrows():
+        null_cols = row[row.isnull()].index.tolist()
+        if null_cols:
+            # Limit to first 100 issues for performance
+            if len(issues) >= 100:
+                break
+                
+            for col in null_cols:
+                issues.append({
+                    "row_index": int(idx),
+                    "column": str(col),
+                    "issue_type": "null_value",
+                    "description": f"Null value found in column '{col}'",
+                    "severity": "warning",
+                    "value": None
+                })
+    
+    return issues
+
 def _generate_routing_info(cleaning_score: Dict[str, Any], remaining_nulls: int) -> Dict[str, Any]:
     """Generate routing information based on cleaning results."""
     quality = cleaning_score.get('quality', 'unknown')
@@ -355,6 +393,9 @@ def _process_dataframe(df: pd.DataFrame, config: dict) -> Dict[str, Any]:
     # Analyze null patterns
     null_analysis = _analyze_null_patterns(df)
     
+    # Track row-level issues before cleaning
+    row_level_issues = _detect_null_row_issues(df)
+    
     # Apply cleaning strategies
     df_cleaned, imputation_log = _apply_imputation_strategy(df, config)
     
@@ -398,7 +439,8 @@ def _process_dataframe(df: pd.DataFrame, config: dict) -> Dict[str, Any]:
             "total_rows_processed": len(df_cleaned),
             "nulls_handled": nulls_handled,
             "original_nulls": original_nulls,
-            "remaining_nulls": remaining_nulls
+            "remaining_nulls": remaining_nulls,
+            "total_issues": len(row_level_issues)
         }),
         "routing": routing_info,
         "data": {
@@ -407,11 +449,230 @@ def _process_dataframe(df: pd.DataFrame, config: dict) -> Dict[str, Any]:
             "imputation_log": imputation_log,
             "summary": summary,
             "cleaned_data_shape": list(df_cleaned.shape),
-            "original_data_shape": list(df.shape)
+            "original_data_shape": list(df.shape),
+            "row_level_issues": row_level_issues[:100]  # Limit to first 100 issues for performance
         },
         "alerts": alerts,
         "cleaned_dataframe": df_cleaned
     }
+
+def _generate_excel_export(response: dict) -> dict:
+    """
+    Generate Excel export blob with complete JSON response.
+    
+    Args:
+        response: Complete JSON response containing source_file, agent, audit, results, and summary
+        
+    Returns:
+        dict: Excel export metadata and base64-encoded blob
+    """
+    import json
+    
+    # Extract components from response
+    filename = response.get("source_file", "unknown")
+    agent_name = response.get("agent", "NullHandler")
+    audit_trail = response.get("audit", {})
+    results = response.get("results", {})
+    summary = response.get("summary", "")
+    
+    try:
+        # Create Excel writer
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            
+            # Sheet 1: Response Overview
+            overview_data = {
+                "Field": ["Source File", "Agent", "Summary"],
+                "Value": [
+                    filename,
+                    agent_name,
+                    summary[:500] + "..." if len(summary) > 500 else summary  # Truncate long summaries
+                ]
+            }
+            overview_df = pd.DataFrame(overview_data)
+            overview_df.to_excel(writer, sheet_name="Response Overview", index=False)
+            
+            # Sheet 2: Audit Summary
+            if audit_trail:
+                audit_summary_data = {
+                    "Metric": [
+                        "Agent Name",
+                        "Agent Version", 
+                        "Timestamp",
+                        "Compute Time (seconds)",
+                        "Total Sheets Processed",
+                        "Total Rows Processed",
+                        "Total Nulls Handled",
+                        "Total Alerts Generated",
+                        "Critical Alerts",
+                        "Warning Alerts",
+                        "Info Alerts"
+                    ],
+                    "Value": [
+                        audit_trail.get("agent_name", ""),
+                        audit_trail.get("agent_version", ""),
+                        audit_trail.get("timestamp", ""),
+                        audit_trail.get("compute_time_seconds", 0),
+                        audit_trail.get("scores", {}).get("total_sheets_processed", 0),
+                        audit_trail.get("scores", {}).get("total_rows_processed", 0),
+                        audit_trail.get("scores", {}).get("total_nulls_handled", 0),
+                        audit_trail.get("scores", {}).get("total_alerts_generated", 0),
+                        audit_trail.get("scores", {}).get("critical_alerts", 0),
+                        audit_trail.get("scores", {}).get("warning_alerts", 0),
+                        audit_trail.get("scores", {}).get("info_alerts", 0)
+                    ]
+                }
+                audit_summary_df = pd.DataFrame(audit_summary_data)
+                audit_summary_df.to_excel(writer, sheet_name="Audit Summary", index=False)
+            
+            # Sheet 3: Fields Scanned
+            if audit_trail.get("fields_scanned"):
+                fields_df = pd.DataFrame({
+                    "Field Name": audit_trail["fields_scanned"]
+                })
+                fields_df.to_excel(writer, sheet_name="Fields Scanned", index=False)
+            
+            # Sheet 4: Findings
+            if audit_trail.get("findings"):
+                findings_df = pd.DataFrame(audit_trail["findings"])
+                findings_df.to_excel(writer, sheet_name="Findings", index=False)
+            
+            # Sheet 5: Actions
+            if audit_trail.get("actions"):
+                actions_df = pd.DataFrame({
+                    "Action": audit_trail["actions"]
+                })
+                actions_df.to_excel(writer, sheet_name="Actions", index=False)
+            
+            # Sheet 6: Configuration/Overrides
+            if audit_trail.get("overrides"):
+                config_data = {
+                    "Parameter": list(audit_trail["overrides"].keys()),
+                    "Value": list(audit_trail["overrides"].values())
+                }
+                config_df = pd.DataFrame(config_data)
+                config_df.to_excel(writer, sheet_name="Configuration", index=False)
+            
+            # Sheet 7: Routing Information
+            routing_data = []
+            for sheet_name, sheet_results in results.items():
+                if "routing" in sheet_results:
+                    routing_info = sheet_results["routing"]
+                    routing_data.append({
+                        "Sheet/Dataset": sheet_name,
+                        "Status": routing_info.get("status", ""),
+                        "Reason": routing_info.get("reason", ""),
+                        "Suggestion": routing_info.get("suggestion", ""),
+                        "Suggested Agent Endpoint": routing_info.get("suggested_agent_endpoint", "")
+                    })
+            
+            if routing_data:
+                routing_df = pd.DataFrame(routing_data)
+                routing_df.to_excel(writer, sheet_name="Routing", index=False)
+            
+            # Sheet 8+: Detailed cleaning results per sheet
+            for sheet_name, sheet_result in results.items():
+                if sheet_result.get("status") == "success" and "data" in sheet_result:
+                    data = sheet_result["data"]
+                    
+                    # Cleaning summary for this sheet
+                    if "cleaning_score" in data:
+                        cleaning_score = data["cleaning_score"]
+                        cleaning_data = {
+                            "Metric": [
+                                "Overall Score",
+                                "Quality",
+                                "Null Reduction Rate (%)",
+                                "Data Retention Rate (%)",
+                                "Column Retention Rate (%)",
+                                "Original Nulls",
+                                "Remaining Nulls",
+                                "Original Rows",
+                                "Cleaned Rows",
+                                "Original Columns",
+                                "Cleaned Columns"
+                            ],
+                            "Value": [
+                                cleaning_score.get("overall_score", 0),
+                                cleaning_score.get("quality", "unknown"),
+                                cleaning_score.get("metrics", {}).get("null_reduction_rate", 0),
+                                cleaning_score.get("metrics", {}).get("data_retention_rate", 0),
+                                cleaning_score.get("metrics", {}).get("column_retention_rate", 0),
+                                cleaning_score.get("metrics", {}).get("original_nulls", 0),
+                                cleaning_score.get("metrics", {}).get("remaining_nulls", 0),
+                                cleaning_score.get("metrics", {}).get("original_rows", 0),
+                                cleaning_score.get("metrics", {}).get("cleaned_rows", 0),
+                                cleaning_score.get("metrics", {}).get("original_columns", 0),
+                                cleaning_score.get("metrics", {}).get("cleaned_columns", 0)
+                            ]
+                        }
+                        safe_name = sheet_name[:25]
+                        pd.DataFrame(cleaning_data).to_excel(writer, sheet_name=f"{safe_name}_Cleaning", index=False)
+                        
+                    # Add sheet-level metadata
+                    if "metadata" in sheet_result:
+                        metadata_data = {
+                            "Metric": list(sheet_result["metadata"].keys()),
+                            "Value": list(sheet_result["metadata"].values())
+                        }
+                        metadata_df = pd.DataFrame(metadata_data)
+                        metadata_df.to_excel(writer, sheet_name=f"Meta_{safe_name}", index=False)
+            
+            # Sheet: Complete JSON Response (for reference)
+            json_data = {
+                "Component": ["Complete JSON Response"],
+                "JSON Data": [json.dumps(response, indent=2, default=str)]
+            }
+            json_df = pd.DataFrame(json_data)
+            json_df.to_excel(writer, sheet_name="Raw JSON", index=False)
+        
+        output.seek(0)
+        excel_bytes = output.read()
+        excel_base64 = base64.b64encode(excel_bytes).decode('utf-8')
+        
+        # Build dynamic sheet list
+        sheets_included = ["Response Overview"]
+        if audit_trail:
+            sheets_included.append("Audit Summary")
+        if audit_trail.get("fields_scanned"):
+            sheets_included.append("Fields Scanned")
+        if audit_trail.get("findings"):
+            sheets_included.append("Findings")
+        if audit_trail.get("actions"):
+            sheets_included.append("Actions")
+        if audit_trail.get("overrides"):
+            sheets_included.append("Configuration")
+        
+        # Check if any routing data exists
+        has_routing = any("routing" in sheet_results for sheet_results in results.values())
+        if has_routing:
+            sheets_included.append("Routing")
+        
+        # Add cleaning result sheets
+        for sheet_name in results.keys():
+            safe_sheet_name = sheet_name[:25]
+            sheets_included.extend([f"{safe_sheet_name}_Cleaning", f"Meta_{safe_sheet_name}"])
+        
+        sheets_included.append("Raw JSON")
+        
+        sheets_list = [sheet for sheet in sheets_included if sheet]  # Remove None values
+        
+        return {
+            "filename": f"{filename.rsplit('.', 1)[0]}_null_handling_report.xlsx",
+            "size_bytes": len(excel_bytes),
+            "format": "xlsx",
+            "base64_data": excel_base64,
+            "sheets_included": sheets_list,
+            "download_ready": True
+        }
+        
+    except Exception as e:
+        # If Excel generation fails, return error info
+        return {
+            "filename": f"{filename.rsplit('.', 1)[0]}_null_handling_report.xlsx",
+            "error": f"Failed to generate Excel export: {str(e)}",
+            "download_ready": False
+        }
 
 def handle_nulls(file_contents: bytes, filename: str, config: dict = None, user_overrides: dict = None):
     """Main function for the NullHandler agent."""
@@ -461,36 +722,86 @@ def handle_nulls(file_contents: bytes, filename: str, config: dict = None, user_
     end_time = time.time()
     compute_time = end_time - start_time
     
-    # Generate Excel output with cleaned data
-    excel_export = ""
-    if len(results) == 1:
-        # Single sheet - use the cleaned dataframe
-        sheet_result = list(results.values())[0]
-        if 'cleaned_dataframe' in sheet_result:
-            excel_export = _generate_excel_output(sheet_result['cleaned_dataframe'], filename)
-    elif len(results) > 1:
-        # Multiple sheets - combine or create multi-sheet Excel
-        try:
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                for sheet_name, sheet_result in results.items():
-                    if 'cleaned_dataframe' in sheet_result:
-                        sheet_result['cleaned_dataframe'].to_excel(writer, sheet_name=f"{sheet_name}_cleaned", index=False)
-            
-            output.seek(0)
-            excel_b64 = base64.b64encode(output.getvalue()).decode('utf-8')
-            base_name = filename.rsplit('.', 1)[0] if '.' in filename else filename
-            excel_export = f"data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{excel_b64}"
-        except Exception as e:
-            excel_export = f"Error generating multi-sheet Excel: {str(e)}"
+    # Store cleaned data for future agents as Excel file blob
+    updated_excel_export = {}
+    
+    # Generate Excel file with all cleaned data
+    try:
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            for sheet_name, sheet_result in results.items():
+                if 'cleaned_dataframe' in sheet_result:
+                    df_cleaned = sheet_result['cleaned_dataframe']
+                    # Write each cleaned dataframe as a separate sheet
+                    safe_sheet_name = sheet_name[:31]  # Excel sheet name limit
+                    df_cleaned.to_excel(writer, sheet_name=safe_sheet_name, index=False)
+        
+        output.seek(0)
+        excel_bytes = output.read()
+        excel_base64 = base64.b64encode(excel_bytes).decode('utf-8')
+        
+        # Create the updated_excel_export structure
+        updated_excel_export = {
+            "filename": f"{filename.rsplit('.', 1)[0]}_cleaned_data.xlsx",
+            "size_bytes": len(excel_bytes),
+            "format": "xlsx",
+            "base64_data": excel_base64
+        }
+        
+    except Exception as e:
+        # Fallback if Excel generation fails
+        updated_excel_export = {
+            "filename": f"{filename.rsplit('.', 1)[0]}_cleaned_data.xlsx",
+            "size_bytes": 0,
+            "format": "xlsx",
+            "base64_data": "",
+            "error": f"Failed to generate cleaned data Excel: {str(e)}"
+        }
+    
+    # Extract audit trail data
+    all_fields_scanned = []
+    all_findings = []
+    total_alerts_generated = 0
+    
+    for sheet_name, sheet_result in results.items():
+        # Extract fields from each sheet
+        if 'data' in sheet_result and 'null_analysis' in sheet_result['data']:
+            null_analysis = sheet_result['data']['null_analysis']
+            if 'columns_with_nulls' in null_analysis:
+                all_fields_scanned.extend(null_analysis['columns_with_nulls'])
+        
+        # Extract findings from alerts
+        alerts = sheet_result.get('alerts', [])
+        total_alerts_generated += len(alerts)
+        for alert in alerts:
+            finding = {
+                "severity": alert.get("level", "info"),
+                "sheet": sheet_name,
+                "issue": alert.get("message", ""),
+                "category": "null_handling",
+                "type": alert.get("type", "unknown")
+            }
+            all_findings.append(finding)
+    
+    # Populate overrides with actual configuration values being used
+    effective_overrides = {
+        "imputation_strategy": config.get("imputation_strategy"),
+        "numeric_strategy": config.get("numeric_strategy"),
+        "categorical_strategy": config.get("categorical_strategy"),
+        "datetime_strategy": config.get("datetime_strategy"),
+        "knn_neighbors": config.get("knn_neighbors"),
+        "quality_threshold": config.get("quality_threshold")
+    }
     
     # Build audit trail
     audit_trail = {
         "agent_name": "NullHandler",
         "timestamp": run_timestamp.isoformat(),
+        "profile_date": run_timestamp.isoformat(),  # Keep for backward compatibility
         "agent_version": AGENT_VERSION,
         "compute_time_seconds": round(compute_time, 2),
-        "sheets_processed": all_sheets_processed,
+        "fields_scanned": list(set(all_fields_scanned)),  # Unique fields
+        "findings": all_findings,
         "actions": [
             f"Processed {total_rows_processed} rows across {len(results)} sheet(s)",
             f"Handled {total_nulls_handled} null values",
@@ -501,9 +812,14 @@ def handle_nulls(file_contents: bytes, filename: str, config: dict = None, user_
         "scores": _convert_numpy_types({
             "total_sheets_processed": len(results),
             "total_rows_processed": total_rows_processed,
-            "total_nulls_handled": total_nulls_handled
+            "total_nulls_handled": total_nulls_handled,
+            "total_alerts_generated": total_alerts_generated,
+            "critical_alerts": sum(1 for f in all_findings if f.get('severity') == 'critical'),
+            "warning_alerts": sum(1 for f in all_findings if f.get('severity') == 'warning'),
+            "info_alerts": sum(1 for f in all_findings if f.get('severity') == 'info')
         }),
-        "overrides": user_overrides if user_overrides else {}
+        "overrides": effective_overrides,
+        "lineage": {}
     }
     
     # Remove cleaned_dataframe from results before JSON serialization
@@ -514,11 +830,18 @@ def handle_nulls(file_contents: bytes, filename: str, config: dict = None, user_
     # Generate LLM summary
     llm_summary = generate_llm_summary("NullHandler", results, audit_trail)
     
-    return _convert_numpy_types({
+    # Build final response
+    response = {
         "source_file": filename,
         "agent": "NullHandler",
         "audit": audit_trail,
         "results": results,
         "summary": llm_summary,
-        "excel_export": excel_export
-    })
+        "updated_excel_export": updated_excel_export  # Add cleaned data for future agents
+    }
+    
+    # Generate Excel export blob with complete response
+    excel_blob = _generate_excel_export(response)
+    response["excel_export"] = excel_blob
+    
+    return _convert_numpy_types(response)

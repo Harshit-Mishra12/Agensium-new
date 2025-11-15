@@ -9,6 +9,7 @@ AGENT_ROUTES = {
     "test_coverage_agent": "/test-coverage",
     "schema_drift_reporter": "/schema-drift",
     "null_handler": "/null-handler",
+    "outlier_remover": "/outlier-remover",
     # "check_governance": "/check-governance",
     # "readiness_rater": "/rate-readiness",
 

@@ -10,7 +10,8 @@ from app.agents.source import (
     schema_drift_reporter
 )
 from app.agents.clean import (
-    null_handler
+    null_handler,
+    outlier_remover
 )
 from app.agents.shared import chat_agent
 from app.agents.source import unified_profiler
@@ -55,44 +56,6 @@ async def profile_my_data_endpoint(
         workflow_def=PROFILE_MY_DATA_WORKFLOW,
         files=files
     )
-
-
-@router.post(AGENT_ROUTES['master_my_data_tool'])
-async def master_my_data_endpoint(
-    current_file: UploadFile = File(...),
-    source_system: str = Form(...),
-    key_column: str = Form(None)
-):
-    """
-    Orchestrator endpoint for the 'Master My Data' tool.
-    Runs the full data mastering workflow: source tagging, entity resolution, 
-    deduplication, and compliance checking.
-    """
-    # Input validation
-    if not source_system or not source_system.strip():
-        raise HTTPException(status_code=400, detail="source_system parameter is required.")
-    
-    # 1. Prepare the files dictionary
-    files = {
-        "current_file": {
-            "contents": await current_file.read(), 
-            "filename": current_file.filename
-        }
-    }
-    
-    # 2. Prepare parameters for agents
-    params = {
-        "source_system": source_system.strip(),
-        "key_column": key_column.strip() if key_column else None
-    }
-    
-    # 3. Call the Master My Data workflow engine
-    return run_master_workflow(
-        workflow_def=MASTER_MY_DATA_WORKFLOW,
-        files=files,
-        params=params
-    )
-
 
 # --- Individual Agent Endpoints (The "Expert's Toolbox") ---
 
@@ -499,6 +462,73 @@ async def null_handler_endpoint(
             config[key] = value
     
     return null_handler.handle_nulls(contents, file.filename, config, user_overrides)
+
+@router.post(AGENT_ROUTES['outlier_remover'])
+async def outlier_remover_endpoint(
+    file: UploadFile = File(...),
+    detection_method: Optional[str] = Form(None),
+    removal_strategy: Optional[str] = Form(None),
+    z_threshold: Optional[str] = Form(None),
+    iqr_multiplier: Optional[str] = Form(None),
+    lower_percentile: Optional[str] = Form(None),
+    upper_percentile: Optional[str] = Form(None),
+    outlier_reduction_weight: Optional[str] = Form(None),
+    data_retention_weight: Optional[str] = Form(None),
+    column_retention_weight: Optional[str] = Form(None),
+    excellent_threshold: Optional[str] = Form(None),
+    good_threshold: Optional[str] = Form(None)
+):
+    """
+    Endpoint for the OutlierRemover agent.
+    Accepts optional parameters that override config.json defaults.
+    """
+    contents = await file.read()
+    
+    # Helper function to convert form values (handles empty strings)
+    def parse_param(value, param_type):
+        if value is None or value == "":
+            return None
+        try:
+            return param_type(value)
+        except (ValueError, TypeError):
+            return None
+    
+    # Parse and validate parameters
+    user_params = {
+        'detection_method': detection_method if detection_method and detection_method in ['z_score', 'iqr', 'percentile'] else None,
+        'removal_strategy': removal_strategy if removal_strategy and removal_strategy in ['remove', 'impute_mean', 'impute_median'] else None,
+        'z_threshold': parse_param(z_threshold, float),
+        'iqr_multiplier': parse_param(iqr_multiplier, float),
+        'lower_percentile': parse_param(lower_percentile, float),
+        'upper_percentile': parse_param(upper_percentile, float),
+        'outlier_reduction_weight': parse_param(outlier_reduction_weight, float),
+        'data_retention_weight': parse_param(data_retention_weight, float),
+        'column_retention_weight': parse_param(column_retention_weight, float),
+        'excellent_threshold': parse_param(excellent_threshold, float),
+        'good_threshold': parse_param(good_threshold, float)
+    }
+    
+    # Track which parameters were overridden by user (for audit trail)
+    user_overrides = {k: v for k, v in user_params.items() if v is not None}
+    
+    # If all parameters are provided, use them directly
+    if all(value is not None for value in user_params.values()):
+        config = user_params
+    else:
+        # Load defaults from config.json for missing parameters
+        try:
+            config_path = Path(__file__).parent.parent / 'config.json'
+            with open(config_path, 'r') as f:
+                config = json.load(f)['OutlierRemover']
+        except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
+            raise HTTPException(status_code=500, detail=f"Configuration error: {str(e)}")
+        
+        # Override with user-provided parameters where present
+        for key, value in user_params.items():
+            if value is not None:
+                config[key] = value
+    
+    return outlier_remover.handle_outliers(contents, file.filename, config, user_overrides)
 
 @router.post(AGENT_ROUTES['chat_with_data'])
 def chat_with_data_endpoint(agent_report: str = Form(...), user_question: str = Form(...),history: str = Form(None)):

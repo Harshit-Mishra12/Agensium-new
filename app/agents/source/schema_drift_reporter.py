@@ -13,7 +13,7 @@ from app.agents.shared.chat_agent import generate_llm_summary
 
 AGENT_VERSION = "1.0.0"
 
-def _analyze_schema_changes(baseline_schema: Dict[str, Any], current_schema: Dict[str, Any]) -> Dict[str, Any]:
+def _analyze_schema_changs(baseline_schema: Dict[str, Any], current_schema: Dict[str, Any]) -> Dict[str, Any]:
     """Analyze schema changes between baseline and current datasets."""
     changes = {
         "added_columns": [],

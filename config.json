@@ -116,5 +116,18 @@
     "column_retention_weight": 0.2,
     "excellent_threshold": 90,
     "good_threshold": 75
+  },
+  "OutlierRemover": {
+    "detection_method": "iqr",
+    "removal_strategy": "remove",
+    "z_threshold": 3.0,
+    "iqr_multiplier": 1.5,
+    "lower_percentile": 1.0,
+    "upper_percentile": 99.0,
+    "outlier_reduction_weight": 0.5,
+    "data_retention_weight": 0.3,
+    "column_retention_weight": 0.2,
+    "excellent_threshold": 90,
+    "good_threshold": 75
   }
 }

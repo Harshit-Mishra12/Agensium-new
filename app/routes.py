@@ -11,7 +11,8 @@ from app.agents.source import (
 )
 from app.agents.clean import (
     null_handler,
-    outlier_remover
+    outlier_remover,
+    type_fixer
 )
 from app.agents.shared import chat_agent
 from app.agents.source import unified_profiler
@@ -529,6 +530,57 @@ async def outlier_remover_endpoint(
                 config[key] = value
     
     return outlier_remover.handle_outliers(contents, file.filename, config, user_overrides)
+
+@router.post(AGENT_ROUTES['type_fixer'])
+async def type_fixer_endpoint(
+    file: UploadFile = File(...),
+    auto_convert_numeric: Optional[str] = Form(None),
+    auto_convert_datetime: Optional[str] = Form(None),
+    auto_convert_boolean: Optional[str] = Form(None),
+    preserve_mixed_types: Optional[str] = Form(None)
+):
+    """
+    Endpoint for the TypeFixer agent.
+    Accepts only the core type conversion parameters that override config.json defaults.
+    """
+    contents = await file.read()
+    
+    # Helper function to convert form values (handles empty strings)
+    def parse_param(value, param_type):
+        if value is None or value == "":
+            return None
+        try:
+            if param_type == bool:
+                return value.lower() in ['true', '1', 'yes']
+            return param_type(value)
+        except (ValueError, TypeError):
+            return None
+    
+    # Parse and validate parameters - only accept the 4 core parameters
+    user_params = {
+        'auto_convert_numeric': parse_param(auto_convert_numeric, bool),
+        'auto_convert_datetime': parse_param(auto_convert_datetime, bool),
+        'auto_convert_boolean': parse_param(auto_convert_boolean, bool),
+        'preserve_mixed_types': parse_param(preserve_mixed_types, bool)
+    }
+    
+    # Track which parameters were overridden by user (for audit trail)
+    user_overrides = {k: v for k, v in user_params.items() if v is not None}
+    
+    # Load defaults from config.json and override with user parameters
+    try:
+        config_path = Path(__file__).parent.parent / 'config.json'
+        with open(config_path, 'r') as f:
+            config = json.load(f)['TypeFixer']
+    except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
+        raise HTTPException(status_code=500, detail=f"Configuration error: {str(e)}")
+    
+    # Override with user-provided parameters where present
+    for key, value in user_params.items():
+        if value is not None:
+            config[key] = value
+    
+    return type_fixer.fix_types(contents, file.filename, config, user_overrides)
 
 @router.post(AGENT_ROUTES['chat_with_data'])
 def chat_with_data_endpoint(agent_report: str = Form(...), user_question: str = Form(...),history: str = Form(None)):

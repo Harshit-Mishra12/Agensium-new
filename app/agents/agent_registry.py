@@ -1,5 +1,5 @@
 from app.agents.source import readiness_rater, drift_detector, governance_checker, test_coverage_agent, schema_drift_reporter
-from app.agents.clean import null_handler
+from app.agents.clean import null_handler, type_fixer
 from app.agents.shared import chat_agent
 
 # This is the central registry for all agents in the system.
@@ -12,6 +12,7 @@ AGENT_REGISTRY = {
     "test_coverage_agent": test_coverage_agent.check_test_coverage,
     "schema_drift_reporter": schema_drift_reporter.report_schema_drift,
     "null_handler": null_handler.handle_nulls,
+    "type_fixer": type_fixer.fix_types,
     # As you build new agents (e.g., clean_data), you will register them here.
     # "clean_data_agent": clean_data.run,
     # Shared/Utility Agents

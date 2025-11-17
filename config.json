@@ -129,5 +129,16 @@
     "column_retention_weight": 0.2,
     "excellent_threshold": 90,
     "good_threshold": 75
+  },
+  "TypeFixer": {
+    "auto_convert_numeric": true,
+    "auto_convert_datetime": true,
+    "preserve_mixed_types": false,
+    "column_fixes": {},
+    "issue_reduction_weight": 0.6,
+    "data_retention_weight": 0.3,
+    "column_retention_weight": 0.1,
+    "excellent_threshold": 90,
+    "good_threshold": 75
   }
 }

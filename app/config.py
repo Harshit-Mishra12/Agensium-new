@@ -10,6 +10,7 @@ AGENT_ROUTES = {
     "schema_drift_reporter": "/schema-drift",
     "null_handler": "/null-handler",
     "outlier_remover": "/outlier-remover",
+    "type_fixer": "/type-fixer",
     # "check_governance": "/check-governance",
     # "readiness_rater": "/rate-readiness",
 
